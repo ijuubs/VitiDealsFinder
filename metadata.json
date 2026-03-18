@@ -1,0 +1,5 @@
+{
+  "name": "Fiji Smart Deals",
+  "description": "Extract, normalize, and structure supermarket promotional flyer data from Fiji into a clean deals database.",
+  "requestFramePermissions": ["geolocation"]
+}
