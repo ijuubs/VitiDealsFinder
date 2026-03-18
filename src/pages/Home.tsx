@@ -7,7 +7,14 @@ import { Link } from 'react-router-dom';
 import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm } from '../utils/helpers';
 
 export default function Home() {
-  const deals = useAppStore(state => state.deals);
+  const allDeals = useAppStore(state => state.deals);
+  
+  // Filter out expired deals for the main view
+  const deals = useMemo(() => {
+    const now = new Date();
+    return allDeals.filter(d => new Date(d.end_date) >= now);
+  }, [allDeals]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'best_value' | 'cheapest_kg' | 'highest_savings' | 'nearby'>('all');

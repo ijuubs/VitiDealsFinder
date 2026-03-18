@@ -12,14 +12,21 @@ export default function ShoppingList() {
     let savings = 0;
     let price = 0;
     const itemSavingsMap = new Map<string, number>();
+    const now = new Date();
 
     shoppingList.forEach(item => {
       const currentPrice = getEffectivePrice(item.deal);
+      const isExpired = new Date(item.deal.end_date) < now;
+      
       price += currentPrice * item.quantity;
 
       // Find comparable deals to calculate average
-      const comparableDeals = allDeals.filter(d => d.name.toLowerCase().trim() === item.deal.name.toLowerCase().trim());
-      if (comparableDeals.length > 1) {
+      const comparableDeals = allDeals.filter(d => 
+        d.name.toLowerCase().trim() === item.deal.name.toLowerCase().trim() &&
+        new Date(d.end_date) >= now // Only compare against active deals
+      );
+      
+      if (!isExpired && comparableDeals.length > 1) {
         const avgPrice = comparableDeals.reduce((acc, d) => acc + getEffectivePrice(d), 0) / comparableDeals.length;
         const itemSaving = avgPrice - currentPrice;
         if (itemSaving > 0) {
@@ -35,10 +42,17 @@ export default function ShoppingList() {
   // Group by cheapest store
   const storeRecommendations = useMemo(() => {
     const storeCounts = new Map<string, number>();
+    const now = new Date();
     
     shoppingList.forEach(item => {
+      const isExpired = new Date(item.deal.end_date) < now;
+      if (isExpired) return; // Don't recommend stores for expired items
+
       // Find the absolute best deal for this item
-      const comparableDeals = allDeals.filter(d => d.name.toLowerCase().trim() === item.deal.name.toLowerCase().trim());
+      const comparableDeals = allDeals.filter(d => 
+        d.name.toLowerCase().trim() === item.deal.name.toLowerCase().trim() &&
+        new Date(d.end_date) >= now
+      );
       if (comparableDeals.length > 0) {
         const bestDeal = comparableDeals.reduce((best, current) => 
           getEffectivePrice(current) < getEffectivePrice(best) ? current : best
@@ -132,12 +146,16 @@ export default function ShoppingList() {
               const savingPerItem = itemSavings.get(item.product_id) || 0;
               const totalItemSaving = savingPerItem * item.quantity;
               const currentPrice = getEffectivePrice(item.deal);
+              const isExpired = new Date(item.deal.end_date) < new Date();
 
               return (
-                <div key={item.product_id} className="bg-white border border-slate-200 rounded-2xl p-4 flex gap-4 items-center relative overflow-hidden">
+                <div key={item.product_id} className={`bg-white border ${isExpired ? 'border-red-200 opacity-90' : 'border-slate-200'} rounded-2xl p-4 flex gap-4 items-center relative overflow-hidden`}>
                   {/* Savings Indicator Strip */}
-                  {totalItemSaving > 0 && (
+                  {totalItemSaving > 0 && !isExpired && (
                     <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500"></div>
+                  )}
+                  {isExpired && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-red-500"></div>
                   )}
                   
                   {item.deal.image_url ? (
@@ -145,7 +163,7 @@ export default function ShoppingList() {
                       <img 
                         src={item.deal.image_url} 
                         alt={item.deal.name} 
-                        className="max-w-full max-h-full object-contain mix-blend-multiply"
+                        className={`max-w-full max-h-full object-contain mix-blend-multiply ${isExpired ? 'grayscale' : ''}`}
                         referrerPolicy="no-referrer"
                       />
                     </div>
@@ -163,7 +181,14 @@ export default function ShoppingList() {
                             {item.deal.brand}
                           </span>
                         )}
-                        <h4 className="font-bold text-slate-900 truncate" title={item.deal.name}>{item.deal.name}</h4>
+                        <h4 className="font-bold text-slate-900 truncate flex items-center gap-2" title={item.deal.name}>
+                          {item.deal.name}
+                          {isExpired && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 uppercase tracking-wider">
+                              Expired
+                            </span>
+                          )}
+                        </h4>
                         <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
                           <MapPin className="w-3 h-3" />
                           <span className="truncate">{item.deal.store} • {item.deal.location}</span>
@@ -171,7 +196,7 @@ export default function ShoppingList() {
                       </div>
                       
                       <div className="text-left sm:text-right flex-shrink-0">
-                        <div className="font-black text-lg text-slate-900">
+                        <div className={`font-black text-lg ${isExpired ? 'text-red-600 line-through opacity-70' : 'text-slate-900'}`}>
                           ${(currentPrice * item.quantity).toFixed(2)}
                         </div>
                         <div className="text-xs text-slate-500">
@@ -198,10 +223,15 @@ export default function ShoppingList() {
                       </div>
 
                       <div className="flex items-center gap-4">
-                        {totalItemSaving > 0 && (
+                        {totalItemSaving > 0 && !isExpired && (
                           <div className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">
                             <TrendingDown className="w-3 h-3" />
                             Save ${totalItemSaving.toFixed(2)}
+                          </div>
+                        )}
+                        {isExpired && (
+                          <div className="text-xs font-medium text-red-500">
+                            Price no longer valid
                           </div>
                         )}
                         <button

@@ -32,21 +32,29 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
     return getDistanceFromLatLonInKm(userLocation.lat, userLocation.lon, coords.lat, coords.lon);
   }, [userLocation, deal.location]);
 
+  const isExpired = useMemo(() => new Date(deal.end_date) < new Date(), [deal.end_date]);
+
   return (
-    <main className="bg-white rounded-2xl shadow-lg relative flex flex-col overflow-hidden border border-gray-200 h-full">
+    <main className={`bg-white rounded-2xl shadow-lg relative flex flex-col overflow-hidden border ${isExpired ? 'border-red-200 opacity-80' : 'border-gray-200'} h-full`}>
       {/* Header */}
       <header className="relative bg-white" data-purpose="product-header">
         {/* Product Image */}
         <div className="w-full h-48 bg-slate-50 flex items-center justify-center overflow-hidden relative p-4">
           {deal.image_url ? (
-            <img alt={deal.name} className="max-w-full max-h-full object-contain mix-blend-multiply" src={deal.image_url} referrerPolicy="no-referrer" />
+            <img alt={deal.name} className={`max-w-full max-h-full object-contain mix-blend-multiply ${isExpired ? 'grayscale' : ''}`} src={deal.image_url} referrerPolicy="no-referrer" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-300">No Image</div>
           )}
           
           {/* Stock Status & Community Verification */}
           <div className="absolute bottom-3 left-3 flex flex-col gap-1.5">
-            {deal.in_stock !== false && (
+            {isExpired && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white border border-red-600 shadow-sm">
+                <span className="material-symbols-outlined text-[12px] mr-1">warning</span>
+                Expired Deal
+              </span>
+            )}
+            {!isExpired && deal.in_stock !== false && (
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-800 border border-green-200 shadow-sm">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5"></span>
                 In Stock
@@ -296,11 +304,12 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
       {/* Action Buttons */}
       <footer className="px-5 py-4 mt-auto bg-gray-50" data-purpose="actions">
         <button 
-          onClick={() => addToShoppingList(deal)}
-          className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-2"
+          onClick={() => !isExpired && addToShoppingList(deal)}
+          disabled={isExpired}
+          className={`w-full py-3 ${isExpired ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'bg-emerald-500 hover:bg-emerald-600 text-white active:scale-[0.98]'} font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2`}
         >
           <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
-          Add to List
+          {isExpired ? 'Deal Expired' : 'Add to List'}
         </button>
         <div className="grid grid-cols-2 gap-2 mt-2">
           <button 

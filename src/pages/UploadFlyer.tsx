@@ -25,7 +25,7 @@ export default function UploadFlyer() {
   const addDeals = useAppStore(state => state.addDeals);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(e.target.files || []);
+    const selectedFiles = Array.from(e.target.files || []) as File[];
     if (selectedFiles.length > 0) {
       addFiles(selectedFiles);
     }
@@ -37,7 +37,7 @@ export default function UploadFlyer() {
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const droppedFiles = Array.from(e.dataTransfer.files || []);
+    const droppedFiles = Array.from(e.dataTransfer.files || []) as File[];
     const imageFiles = droppedFiles.filter(file => file.type.startsWith('image/'));
     
     if (imageFiles.length > 0) {
@@ -93,6 +93,9 @@ export default function UploadFlyer() {
         
         // Process images based on bounding boxes
         const processImages = async (products: Product[]): Promise<Product[]> => {
+          if (!products || !Array.isArray(products)) {
+            return [];
+          }
           return new Promise((resolve) => {
             const img = new Image();
             img.onload = () => {
