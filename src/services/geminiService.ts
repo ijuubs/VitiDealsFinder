@@ -1,7 +1,79 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { FlyerData } from "../types";
+import { FlyerData, Deal } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+export async function askConcierge(
+  userMessage: string,
+  history: { role: string; parts: { text: string }[] }[],
+  deals: Deal[]
+): Promise<{ message: string; suggested_product_ids: string[] }> {
+  // Simplify deals to save tokens and focus the AI, limit to 100 to prevent token overflow
+  const simplifiedDeals = deals.slice(0, 100).map(d => ({
+    id: d.product_id,
+    name: d.name,
+    price: d.price || (d.variants && d.variants.length > 0 ? d.variants[0].price : null),
+    store: d.store,
+    location: d.location,
+    category: d.category,
+    weight: d.weight
+  }));
+
+  const systemInstruction = `You are a helpful Fiji supermarket shopping concierge.
+You help users find the best deals, plan meals, and build shopping lists.
+You have access to the following current active deals:
+${JSON.stringify(simplifiedDeals)}
+
+When the user asks a question, recommend the best products from the available deals.
+If they ask for a recipe or meal plan, suggest the ingredients that are currently on sale.
+If they ask for the cheapest item, find it and tell them where it is.
+Always return your response in JSON format matching the schema.
+If suggesting items to add to their shopping list, include their exact 'id' in the suggested_product_ids array.
+IMPORTANT: Keep your response concise. Limit your suggested products to a maximum of 10 items to avoid overwhelming the user.`;
+
+  const generatePromise = ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [...history, { role: 'user', parts: [{ text: userMessage }] }],
+    config: {
+      systemInstruction,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          message: { type: Type.STRING, description: "Your conversational response to the user. Use markdown for formatting." },
+          suggested_product_ids: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "List of product IDs you recommend based on the user's query."
+          }
+        },
+        required: ["message", "suggested_product_ids"]
+      }
+    }
+  });
+
+  // Add a 30-second timeout
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error("Concierge request timed out after 30 seconds.")), 30000);
+  });
+
+  const response = await Promise.race([generatePromise, timeoutPromise]);
+
+  let responseText = response.text;
+  if (!responseText) {
+    throw new Error("No response from Gemini");
+  }
+
+  // Sometimes the model wraps JSON in markdown blocks even with responseMimeType set
+  responseText = responseText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+
+  try {
+    return JSON.parse(responseText);
+  } catch (e) {
+    console.error("Failed to parse JSON response:", responseText);
+    throw new Error("Failed to parse response from Gemini");
+  }
+}
 
 const SYSTEM_INSTRUCTION = `You are a specialist in extracting product deals from Fiji supermarket flyers (RB Patel, MH, MaxVal-u, New World IGA, Shop N Save, Extra).
 

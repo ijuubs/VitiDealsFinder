@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Deal } from '../types';
 import { useAppStore } from '../store';
 import CompareModal from './CompareModal';
-import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm } from '../utils/helpers';
+import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm, isBasicNeed } from '../utils/helpers';
 
 const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: {lat: number, lon: number} | null }> = ({ deal, isBestValue, userLocation }) => {
   const addToShoppingList = useAppStore(state => state.addToShoppingList);
@@ -70,6 +70,12 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/90 text-white border border-emerald-400 shadow-sm backdrop-blur-sm">
                 <span className="material-symbols-outlined text-[12px] mr-1">trending_up</span>
                 Top Pick
+              </span>
+            )}
+            {isBasicNeed(deal) && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/90 text-white border border-rose-400 shadow-sm backdrop-blur-sm">
+                <span className="material-symbols-outlined text-[12px] mr-1">shopping_basket</span>
+                Basic Need
               </span>
             )}
           </div>
@@ -249,23 +255,29 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
         <section className="px-5 py-3 border-b border-gray-100" data-purpose="store-comparison-list">
           <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Compare Stores</h3>
           <div className="space-y-2">
-            {comparableDeals.slice(0, 3).map((compDeal, idx) => {
+            {comparableDeals
+              .filter(d => d.product_id !== deal.product_id)
+              .sort((a, b) => getEffectivePrice(a) - getEffectivePrice(b))
+              .slice(0, 3)
+              .map((compDeal, idx) => {
               const compPrice = getEffectivePrice(compDeal);
-              const isBest = compPrice <= currentPrice;
-              const diff = compPrice - currentPrice;
+              const isBetter = compPrice < currentPrice;
+              const diff = Math.abs(compPrice - currentPrice);
               
               return (
-                <div key={idx} className={`flex justify-between items-center p-2 rounded-lg ${isBest ? 'border border-emerald-200 bg-emerald-50' : 'border border-gray-100'}`}>
+                <div key={idx} className={`flex justify-between items-center p-2 rounded-lg ${isBetter ? 'border border-emerald-200 bg-emerald-50' : 'border border-gray-100'}`}>
                   <div>
                     <span className="block text-sm font-bold text-gray-900">{compDeal.store}</span>
                     <div className="flex items-center gap-2">
-                      {isBest && <span className="text-[10px] text-emerald-600 font-bold">Best Price</span>}
+                      {isBetter && <span className="text-[10px] text-emerald-600 font-bold">Better Price</span>}
                       <span className="text-[10px] text-gray-500">{compDeal.location}</span>
                     </div>
                   </div>
                   <div className="text-right">
                     <span className="block text-sm font-bold text-gray-900">${compPrice.toFixed(2)}</span>
-                    {!isBest && <span className="text-[10px] text-red-500">+${diff.toFixed(2)}</span>}
+                    <span className={`text-[10px] ${isBetter ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {isBetter ? '-' : '+'}${diff.toFixed(2)}
+                    </span>
                   </div>
                 </div>
               );
@@ -311,17 +323,16 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
           <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
           {isExpired ? 'Deal Expired' : 'Add to List'}
         </button>
-        <div className="grid grid-cols-2 gap-2 mt-2">
+        <div className="mt-2">
           <button 
             onClick={() => setShowCompare(true)}
-            className="w-full py-2 border border-gray-200 bg-white text-gray-700 text-xs font-semibold rounded-xl hover:bg-gray-50 flex items-center justify-center gap-1"
+            disabled={comparableDeals.length <= 1}
+            className={`w-full py-2 border border-gray-200 bg-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1 transition-colors ${
+              comparableDeals.length <= 1 ? 'text-gray-400 cursor-not-allowed opacity-70' : 'text-gray-700 hover:bg-gray-50'
+            }`}
           >
             <span className="material-symbols-outlined text-[16px]">compare_arrows</span>
-            Compare
-          </button>
-          <button className="w-full py-2 border border-gray-200 bg-white text-gray-700 text-xs font-semibold rounded-xl hover:bg-gray-50 flex items-center justify-center gap-1">
-            <span className="material-symbols-outlined text-[16px]">notifications_active</span>
-            Alert
+            {comparableDeals.length <= 1 ? 'No Comparisons Available' : `Compare (${comparableDeals.length - 1} other stores)`}
           </button>
         </div>
       </footer>

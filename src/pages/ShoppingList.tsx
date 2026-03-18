@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store';
 import { Trash2, Plus, Minus, ShoppingBag, Tag, MapPin, TrendingDown, Share2, Copy } from 'lucide-react';
-import { getEffectivePrice } from '../utils/helpers';
+import { getEffectivePrice, isBasicNeed } from '../utils/helpers';
 
 export default function ShoppingList() {
   const { shoppingList, removeFromShoppingList, updateQuantity, deals: allDeals } = useAppStore();
@@ -186,6 +186,11 @@ export default function ShoppingList() {
                           {isExpired && (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 uppercase tracking-wider">
                               Expired
+                            </span>
+                          )}
+                          {isBasicNeed(item.deal) && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-700 uppercase tracking-wider">
+                              Basic Need
                             </span>
                           )}
                         </h4>

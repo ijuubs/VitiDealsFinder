@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { X, Trophy, TrendingDown, AlertCircle, ShoppingBag, Tag, MapPin, Info, CheckCircle2, ShoppingCart, Navigation, SlidersHorizontal, Maximize2, Layers, History, Bell, ListPlus, PackageSearch } from 'lucide-react';
 import { Deal } from '../types';
 import { useAppStore } from '../store';
-import { getStoreCoordinates, getDistanceFromLatLonInKm, getEffectivePrice, getNormalizedPrice } from '../utils/helpers';
+import { getStoreCoordinates, getDistanceFromLatLonInKm, getEffectivePrice, getNormalizedPrice, isBasicNeed } from '../utils/helpers';
 
 export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: () => void }) {
   const allDeals = useAppStore(state => state.deals);
@@ -139,20 +139,40 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
 
   const { pricePerKg, unit } = getNormalizedPrice(deal);
 
-  // Calculate Basket Impact
-  const currentBasketSavings = useMemo(() => {
-    return shoppingList.reduce((total, item) => {
-      const itemDeals = allDeals.filter(d => d.name.toLowerCase().trim() === item.deal.name.toLowerCase().trim());
+  // Calculate Total Savings Potential
+  const totalSavingsPotential = useMemo(() => {
+    let potential = 0;
+    const processedProductNames = new Set<string>();
+
+    // Calculate potential savings for items already in the list
+    shoppingList.forEach(item => {
+      const normalizedName = item.deal.name.toLowerCase().trim();
+      processedProductNames.add(normalizedName);
+
+      const itemDeals = allDeals.filter(d => d.name.toLowerCase().trim() === normalizedName);
       if (itemDeals.length > 1) {
         const avg = itemDeals.reduce((acc, d) => acc + getEffectivePrice(d), 0) / itemDeals.length;
-        const savings = avg - getEffectivePrice(item.deal);
-        return total + (savings > 0 ? savings * item.quantity : 0);
+        const cheapest = Math.min(...itemDeals.map(d => getEffectivePrice(d)));
+        const maxSavings = avg - cheapest;
+        if (maxSavings > 0) {
+          potential += maxSavings * item.quantity;
+        }
       }
-      return total;
-    }, 0);
-  }, [shoppingList, allDeals]);
+    });
 
-  const projectedTotalSavings = currentBasketSavings + (absoluteSavings > 0 ? absoluteSavings : 0);
+    // Add potential savings for the current item if it's not in the list
+    const currentNormalizedName = deal.name.toLowerCase().trim();
+    if (!processedProductNames.has(currentNormalizedName)) {
+      if (hasMultipleStores) {
+        const maxSavingsForCurrent = averagePrice - bestPrice;
+        if (maxSavingsForCurrent > 0) {
+          potential += maxSavingsForCurrent; // Assuming quantity 1
+        }
+      }
+    }
+
+    return potential;
+  }, [shoppingList, allDeals, deal.name, hasMultipleStores, averagePrice, bestPrice]);
 
   const handleAddToList = () => {
     addToShoppingList(bestDeal);
@@ -225,6 +245,11 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
                     <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider">
                       {deal.category}
                     </span>
+                    {isBasicNeed(deal) && (
+                      <span className="bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1">
+                        <ShoppingBag className="w-3 h-3" /> Basic Need
+                      </span>
+                    )}
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight mb-2">{deal.name}</h2>
                   {deal.weight && <p className="text-slate-500 font-medium">{deal.weight}</p>}
@@ -325,16 +350,15 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
                 </div>
               )}
 
-              {/* Basket Impact */}
+              {/* Total Savings Potential */}
               <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex items-start gap-3">
                 <div className="bg-purple-100 p-2 rounded-xl text-purple-600 flex-shrink-0">
                   <ListPlus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-purple-900">Basket Impact</h4>
+                  <h4 className="font-bold text-purple-900">Total Savings Potential</h4>
                   <p className="text-purple-800 text-sm mt-0.5">
-                    Adding this to your list brings your total basket savings to <strong>${projectedTotalSavings.toFixed(2)}</strong>!
-                    {currentBasketSavings > 0 && ` (Currently saving $${currentBasketSavings.toFixed(2)} on other items)`}
+                    If you buy all items on your list (plus this one) at their cheapest stores, you could save a total of <strong>${totalSavingsPotential.toFixed(2)}</strong>!
                   </p>
                 </div>
               </div>

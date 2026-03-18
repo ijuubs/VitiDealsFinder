@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store';
 import ProductCard from '../components/ProductCard';
-import { Search, SlidersHorizontal, Upload, MapPin, TrendingDown, Trophy } from 'lucide-react';
+import { Search, SlidersHorizontal, Upload, MapPin, TrendingDown, Trophy, ShoppingBasket } from 'lucide-react';
 import { Deal } from '../types';
 import { Link } from 'react-router-dom';
-import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm } from '../utils/helpers';
+import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm, isBasicNeed } from '../utils/helpers';
 
 export default function Home() {
   const allDeals = useAppStore(state => state.deals);
@@ -17,7 +17,7 @@ export default function Home() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'best_value' | 'cheapest_kg' | 'highest_savings' | 'nearby'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'basic_needs' | 'best_value' | 'cheapest_kg' | 'highest_savings' | 'nearby'>('all');
   const [userLocation, setUserLocation] = useState<{lat: number, lon: number} | null>(null);
 
   useEffect(() => {
@@ -46,6 +46,7 @@ export default function Home() {
       const avgPrice = comparableDeals.reduce((acc, d) => acc + getEffectivePrice(d), 0) / comparableDeals.length;
       const savings = avgPrice - currentPrice;
       const { pricePerKg } = getNormalizedPrice(deal);
+      const basicNeed = isBasicNeed(deal);
       
       let distance = Infinity;
       if (userLocation) {
@@ -61,7 +62,8 @@ export default function Home() {
         avgPrice,
         savings,
         pricePerKg,
-        distance
+        distance,
+        basicNeed
       };
     });
   }, [deals, userLocation]);
@@ -102,6 +104,9 @@ export default function Home() {
     });
 
     switch (activeFilter) {
+      case 'basic_needs':
+        result = result.filter(d => d.basicNeed);
+        break;
       case 'best_value':
         result = result.filter(d => bestValueIds.has(d.product_id));
         break;
@@ -115,8 +120,10 @@ export default function Home() {
         result = result.filter(d => d.distance < 20).sort((a, b) => a.distance - b.distance);
         break;
       default:
-        // Default sort: highest savings first, then alphabetical
+        // Default sort: basic needs first, then highest savings, then alphabetical
         result.sort((a, b) => {
+          if (a.basicNeed && !b.basicNeed) return -1;
+          if (!a.basicNeed && b.basicNeed) return 1;
           if (b.savings !== a.savings) return b.savings - a.savings;
           return a.name.localeCompare(b.name);
         });
@@ -183,6 +190,14 @@ export default function Home() {
             }`}
           >
             All Deals
+          </button>
+          <button
+            onClick={() => setActiveFilter('basic_needs')}
+            className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-2 ${
+              activeFilter === 'basic_needs' ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <ShoppingBasket className="w-4 h-4" /> Basic Needs
           </button>
           <button
             onClick={() => setActiveFilter('best_value')}

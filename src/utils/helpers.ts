@@ -60,3 +60,16 @@ export function getNormalizedPrice(deal: any): { pricePerKg: number | null, unit
   }
   return { pricePerKg: null, unit: 'ea' };
 }
+
+export function isBasicNeed(deal: any): boolean {
+  const textToSearch = `${deal.name} ${deal.category} ${deal.subcategory} ${deal.brand || ''}`.toLowerCase();
+  
+  const basicNeedKeywords = [
+    'rice', 'flour', 'sugar', 'cooking oil', 'soybean oil', 'canola oil', 'vegetable oil',
+    'dhal', 'split peas', 'toor dhal', 'moong dhal', 'lentils', 'beans',
+    'salt', 'tea', 'mackerel', 'sardines', 'milk', 'butter', 'eggs', 'chicken',
+    'gas', 'lpg', 'toilet paper', 'soap', 'sanitary pad', 'diaper', 'infant formula', 'lactogen', 's26'
+  ];
+  
+  return basicNeedKeywords.some(kw => textToSearch.includes(kw));
+}
