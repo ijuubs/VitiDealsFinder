@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileImage, Loader2, CheckCircle2, AlertCircle, Trash2, Edit2, Check, X, Image as ImageIcon } from 'lucide-react';
+import { Upload, FileImage, Loader2, CheckCircle2, AlertCircle, Trash2, Edit2, Check, X, Image as ImageIcon, WifiOff } from 'lucide-react';
 import { extractDealsFromFlyer } from '../services/geminiService';
 import { useAppStore } from '../store';
 import { Deal, Product } from '../types';
@@ -14,6 +14,20 @@ export default function UploadFlyer() {
   const [extractionStatus, setExtractionStatus] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   
   // Preview state
   const [extractedDeals, setExtractedDeals] = useState<Deal[]>([]);
@@ -376,21 +390,28 @@ export default function UploadFlyer() {
       <div 
         className={`border-2 border-dashed rounded-3xl p-8 text-center transition-colors ${
           files.length > 0 ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-300 hover:border-slate-400 bg-white'
-        }`}
+        } ${isOffline ? 'opacity-50 pointer-events-none' : ''}`}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
         <div className="flex flex-col items-center justify-center py-8">
           <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-            <Upload className="w-8 h-8 text-slate-400" />
+            {isOffline ? <WifiOff className="w-8 h-8 text-slate-400" /> : <Upload className="w-8 h-8 text-slate-400" />}
           </div>
-          <h3 className="text-lg font-bold text-slate-900 mb-2">Drag and drop your flyers here</h3>
+          <h3 className="text-lg font-bold text-slate-900 mb-2">
+            {isOffline ? 'Offline Mode' : 'Drag and drop your flyers here'}
+          </h3>
           <p className="text-slate-500 mb-6 max-w-sm">
-            Supports JPG, PNG, and WebP. Make sure the text and prices are clearly visible.
+            {isOffline 
+              ? 'You cannot upload flyers while offline. Please connect to the internet to use this feature.' 
+              : 'Supports JPG, PNG, and WebP. Make sure the text and prices are clearly visible.'}
           </p>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="bg-white border border-slate-200 text-slate-700 font-medium py-2.5 px-6 rounded-xl hover:bg-slate-50 transition-colors"
+            disabled={isOffline}
+            className={`bg-white border border-slate-200 text-slate-700 font-medium py-2.5 px-6 rounded-xl transition-colors ${
+              isOffline ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'
+            }`}
           >
             Browse Files
           </button>
@@ -480,9 +501,9 @@ export default function UploadFlyer() {
       <div className="flex justify-end">
         <button
           onClick={handleExtract}
-          disabled={files.length === 0 || isExtracting}
+          disabled={files.length === 0 || isExtracting || isOffline}
           className={`bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-8 rounded-xl flex items-center gap-2 transition-colors ${
-            (files.length === 0 || isExtracting) ? 'opacity-50 cursor-not-allowed' : ''
+            (files.length === 0 || isExtracting || isOffline) ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
           {isExtracting ? (
