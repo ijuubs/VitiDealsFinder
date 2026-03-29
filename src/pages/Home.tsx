@@ -15,10 +15,11 @@ export default function Home() {
   const setSelectedRegion = useAppStore(state => state.setSelectedRegion);
   const navigate = useNavigate();
   
-  // Filter out expired deals for the main view
+  // Filter out expired deals for the main view, but fallback to all if none are active
   const deals = useMemo(() => {
     const now = new Date();
-    return allDeals.filter(d => new Date(d.end_date) >= now);
+    const activeDeals = allDeals.filter(d => new Date(d.end_date) >= now);
+    return activeDeals.length > 0 ? activeDeals : allDeals;
   }, [allDeals]);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,13 +153,27 @@ export default function Home() {
 
   const topDeals = useMemo(() => {
     // For top deals, we strictly want basic needs items, sorted by highest savings or lowest price
-    return dealsWithMetrics
+    const basicNeedsDeals = dealsWithMetrics
       .filter(d => d.basicNeed)
       .sort((a, b) => {
         if (b.savings !== a.savings) return b.savings - a.savings;
         return (a.pricePerKg || a.currentPrice) - (b.pricePerKg || b.currentPrice);
-      })
-      .slice(0, 10);
+      });
+
+    // Get unique items by name
+    const uniqueDeals = [];
+    const seenNames = new Set();
+    
+    for (const deal of basicNeedsDeals) {
+      const nameKey = (deal.name || '').toLowerCase().trim();
+      if (!seenNames.has(nameKey)) {
+        seenNames.add(nameKey);
+        uniqueDeals.push(deal);
+        if (uniqueDeals.length === 10) break;
+      }
+    }
+    
+    return uniqueDeals;
   }, [dealsWithMetrics]);
 
   const { visibleItems, hasMore, observerTarget } = useInfiniteScroll(filteredDeals, 20);
@@ -200,7 +215,7 @@ export default function Home() {
       <div>
         <div className="flex justify-between items-end mb-4">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 font-display">Today's Top Deals</h2>
+            <h2 className="text-2xl font-bold text-slate-900 font-display">Today's Top 10 Basic Needs Deals</h2>
             <p className="text-sm text-slate-500">Verified 2 hours ago</p>
           </div>
           <button className="text-[#0097b2] font-bold text-sm">See all</button>

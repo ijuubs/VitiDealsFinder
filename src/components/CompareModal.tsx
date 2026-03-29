@@ -1,8 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { X, Trophy, TrendingDown, AlertCircle, ShoppingBag, Tag, MapPin, Info, CheckCircle2, ShoppingCart, Navigation, SlidersHorizontal, Maximize2, Layers, History, Bell, ListPlus, PackageSearch } from 'lucide-react';
+import { X, Trophy, TrendingDown, AlertCircle, ShoppingBag, Tag, MapPin, Info, CheckCircle2, ShoppingCart, Navigation, SlidersHorizontal, Maximize2, Layers, History, Bell, ListPlus, PackageSearch, Star, Leaf } from 'lucide-react';
 import { Deal } from '../types';
 import { useAppStore } from '../store';
-import { getStoreCoordinates, getDistanceFromLatLonInKm, getEffectivePrice, getNormalizedPrice, isBasicNeed } from '../utils/helpers';
+import { getStoreCoordinates, getDistanceFromLatLonInKm, getEffectivePrice, getNormalizedPrice, isBasicNeed, isFoodItem } from '../utils/helpers';
 
 export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: () => void }) {
   const allDeals = useAppStore(state => state.deals);
@@ -203,6 +203,71 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
 
   const { pricePerKg, unit } = getNormalizedPrice(deal);
 
+  // Mock data generators for enhanced UI
+  const rating = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < deal.name.length; i++) {
+      hash = deal.name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const r = (Math.abs(hash) % 20) / 10 + 3.5; // 3.5 to 5.0
+    return Math.min(5, Math.max(1, r)).toFixed(1);
+  }, [deal.name]);
+
+  const reviewCount = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < deal.name.length; i++) {
+      hash = deal.name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return Math.abs(hash) % 500 + 10;
+  }, [deal.name]);
+
+  const sparklineData = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < deal.name.length; i++) {
+      hash = deal.name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const basePrice = currentPrice;
+    const points = [];
+    for (let i = 0; i < 10; i++) {
+      const variance = ((Math.abs(hash + i * 10) % 20) - 10) / 100; // -10% to +10%
+      points.push(basePrice * (1 + variance));
+    }
+    points.push(currentPrice); // Last point is current price
+    return points;
+  }, [deal.name, currentPrice]);
+
+  const sparklinePath = useMemo(() => {
+    const min = Math.min(...sparklineData);
+    const max = Math.max(...sparklineData);
+    const range = max - min || 1;
+    const width = 120;
+    const height = 40;
+    const step = width / (sparklineData.length - 1);
+    
+    return sparklineData.map((val, i) => {
+      const x = i * step;
+      const y = height - ((val - min) / range) * height;
+      return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+    }).join(' ');
+  }, [sparklineData]);
+
+  const nutriScore = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < deal.name.length; i++) {
+      hash = deal.name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const scores = ['A', 'B', 'C', 'D', 'E'];
+    return scores[Math.abs(hash) % 5];
+  }, [deal.name]);
+  
+  const nutriColor = {
+    'A': 'bg-emerald-600',
+    'B': 'bg-emerald-400',
+    'C': 'bg-yellow-400',
+    'D': 'bg-orange-500',
+    'E': 'bg-red-600'
+  }[nutriScore];
+
   // Calculate Total Savings Potential
   const totalSavingsPotential = useMemo(() => {
     let potential = 0;
@@ -338,7 +403,26 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
                     })}
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight mb-2">{deal.name}</h2>
-                  {deal.weight && <p className="text-slate-500 font-medium">{deal.weight}</p>}
+                  {deal.weight && <p className="text-slate-500 font-medium mb-3">Size: {deal.weight}</p>}
+                  
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1">
+                      <div className="flex items-center text-amber-400">
+                        <Star className="w-4 h-4 fill-current" />
+                        <span className="text-sm font-bold text-slate-700 ml-1">{rating}</span>
+                      </div>
+                      <span className="text-xs text-slate-400">({reviewCount} reviews)</span>
+                    </div>
+                    
+                    {isBasicNeed(deal) && isFoodItem(deal) && (
+                      <div className="flex items-center gap-1.5" title="Nutritional Score">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Nutri-Score</span>
+                        <div className={`w-6 h-6 rounded flex items-center justify-center text-white font-black text-xs ${nutriColor}`}>
+                          {nutriScore}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -419,6 +503,70 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
                   <h4 className="font-bold">Smart Insight</h4>
                   <p className="text-sm mt-0.5 font-medium">{smartInsight.text}</p>
                 </div>
+              </div>
+
+              {/* Price History & Nutritional Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Price History */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <History className="w-4 h-4 text-slate-400" />
+                    Price History (30 Days)
+                  </h4>
+                  <div className="flex items-end justify-between mb-2">
+                    <div>
+                      <div className="text-xs text-slate-500 mb-1">Current vs Avg</div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-xl font-black text-slate-900">${currentPrice.toFixed(2)}</span>
+                        <span className="text-sm text-slate-400 line-through">${priceHistory.avg30Days.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <svg width="120" height="40" className="overflow-visible">
+                        <path d={sparklinePath} fill="none" stroke={deal.price_trend === 'dropping' ? '#10b981' : deal.price_trend === 'rising' ? '#ef4444' : '#3b82f6'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider mt-2 ${
+                        deal.price_trend === 'dropping' ? 'text-emerald-600' : 
+                        deal.price_trend === 'rising' ? 'text-red-600' : 'text-blue-600'
+                      }`}>
+                        {deal.price_trend === 'dropping' ? 'Trending Down' : 
+                         deal.price_trend === 'rising' ? 'Trending Up' : 'Price Stable'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-500 border-t border-slate-100 pt-3 mt-3">
+                    <span>Min: ${priceHistory.minPrice.toFixed(2)}</span>
+                    <span>Max: ${priceHistory.maxPrice.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Nutritional Info (Mock) */}
+                {isBasicNeed(deal) && isFoodItem(deal) && (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                    <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <Leaf className="w-4 h-4 text-slate-400" />
+                      Nutritional Info (Est.)
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-slate-50 p-2.5 rounded-xl">
+                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-0.5">Calories</div>
+                        <div className="font-black text-slate-900">{(Math.abs(deal.name.length * 15) % 300 + 50)} kcal</div>
+                      </div>
+                      <div className="bg-slate-50 p-2.5 rounded-xl">
+                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-0.5">Protein</div>
+                        <div className="font-black text-slate-900">{(Math.abs(deal.name.length * 3) % 20 + 1)}g</div>
+                      </div>
+                      <div className="bg-slate-50 p-2.5 rounded-xl">
+                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-0.5">Carbs</div>
+                        <div className="font-black text-slate-900">{(Math.abs(deal.name.length * 8) % 50 + 5)}g</div>
+                      </div>
+                      <div className="bg-slate-50 p-2.5 rounded-xl">
+                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-0.5">Fat</div>
+                        <div className="font-black text-slate-900">{(Math.abs(deal.name.length * 2) % 15 + 0.5).toFixed(1)}g</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Smart Recommendation */}

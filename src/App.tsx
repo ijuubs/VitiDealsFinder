@@ -11,6 +11,7 @@ import { useAppStore } from './store';
 
 export default function App() {
   const syncOfflineDeals = useAppStore(state => state.syncOfflineDeals);
+  const fetchDealsFromSupabase = useAppStore(state => state.fetchDealsFromSupabase);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -23,12 +24,13 @@ export default function App() {
     // Also try to sync on initial load if we are online
     if (navigator.onLine) {
       syncOfflineDeals();
+      fetchDealsFromSupabase();
     }
 
     return () => {
       window.removeEventListener('online', handleOnline);
     };
-  }, [syncOfflineDeals]);
+  }, [syncOfflineDeals, fetchDealsFromSupabase]);
 
   return (
     <BrowserRouter>

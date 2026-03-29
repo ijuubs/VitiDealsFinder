@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store';
-import { Trash2, Plus, Minus, ShoppingBag, Tag, MapPin, TrendingDown, Share2, Copy, CheckCircle2 } from 'lucide-react';
+import { Trash2, Plus, Minus, ShoppingBag, Tag, MapPin, TrendingDown, Share2, Copy, CheckCircle2, Sparkles } from 'lucide-react';
 import { getEffectivePrice, isBasicNeed, getStoreCoordinates, getDistanceFromLatLonInKm } from '../utils/helpers';
 import { useNavigate } from 'react-router-dom';
+import SmartListGenerator from '../components/SmartListGenerator';
 
 export default function ShoppingList() {
   const { shoppingList, removeFromShoppingList, clearShoppingList, updateQuantity, optimizeShoppingList, deals: allDeals, userLocation, selectedRegion, addSavings } = useAppStore();
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
+  const [showSmartGenerator, setShowSmartGenerator] = useState(false);
   const navigate = useNavigate();
 
   // Filter deals based on selected region
@@ -66,7 +68,8 @@ export default function ShoppingList() {
   // Trip Optimizer Logic
   const tripOptimizer = useMemo(() => {
     const now = new Date();
-    const activeItems = shoppingList.filter(item => new Date(item.deal.end_date) >= now);
+    let activeItems = shoppingList.filter(item => new Date(item.deal.end_date) >= now);
+    if (activeItems.length === 0) activeItems = shoppingList; // Fallback to all items if none are active
     
     if (activeItems.length === 0) return null;
 
@@ -182,11 +185,20 @@ export default function ShoppingList() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-6">
-      <div>
-        <h1 className="text-3xl font-black tracking-tight text-slate-900 font-display">Your Shopping List</h1>
-        <p className="text-slate-500 mt-2 font-medium">
-          Track your items and see how much you're saving across different stores.
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 font-display">Your Shopping List</h1>
+          <p className="text-slate-500 mt-2 font-medium">
+            Track your items and see how much you're saving across different stores.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowSmartGenerator(true)}
+          className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-colors"
+        >
+          <Sparkles className="w-5 h-5" />
+          Smart Generator
+        </button>
       </div>
 
       {shoppingList.length === 0 ? (
@@ -204,6 +216,15 @@ export default function ShoppingList() {
           >
             Browse Deals
           </button>
+          <div className="mt-4">
+            <button
+              onClick={() => setShowSmartGenerator(true)}
+              className="inline-flex items-center justify-center px-6 py-3 border border-indigo-200 text-base font-medium rounded-xl text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors shadow-sm hover:shadow-md gap-2"
+            >
+              <Sparkles className="w-5 h-5" />
+              Use Smart Generator
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -495,6 +516,9 @@ export default function ShoppingList() {
             </div>
           </div>
         </div>
+      )}
+      {showSmartGenerator && (
+        <SmartListGenerator onClose={() => setShowSmartGenerator(false)} />
       )}
     </div>
   );

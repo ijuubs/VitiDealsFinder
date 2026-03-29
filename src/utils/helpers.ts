@@ -89,15 +89,55 @@ export function getNormalizedPrice(deal: any): { pricePerKg: number | null, unit
   return { pricePerKg: null, unit: 'ea' };
 }
 
+export const BASIC_NEED_KEYWORDS = [
+  'rice', 'flour', 'sugar', 'cooking oil', 'soybean oil', 'canola oil', 'vegetable oil', 'sunflower oil',
+  'dhal', 'split peas', 'toor dhal', 'moong dhal', 'lentils', 'beans',
+  'salt', 'tea', 'mackerel', 'sardines', 'tuna', 'milk', 'butter', 'margarine', 'eggs',
+  'chicken', 'beef', 'lamb', 'sausage', 'meat', 'fish',
+  'potato', 'potatoes', 'onion', 'onions', 'garlic', 'carrot', 'carrots', 'cabbage', 'tomato', 'tomatoes',
+  'bread', 'loaf', 'noodle', 'noodles', 'maggi', 'water',
+  'gas', 'lpg', 'toilet paper', 'tissue', 'soap', 'washing powder', 'detergent',
+  'sanitary pad', 'diaper', 'nappies', 'infant formula', 'baby milk', 'lactogen', 's26'
+];
+
+export const NEGATIVE_KEYWORDS = [
+  'towel', 'chocolate', 'biscuit', 'cake', 'candy', 'sweet', 'ice cream',
+  'toy', 'mug', 'cup', 'plate', 'dish', 'appliance', 'clothing', 'shoe',
+  'snack', 'chips', 'soda', 'juice', 'energy drink', 'beer', 'wine', 'liquor',
+  'shampoo', 'conditioner', 'lotion', 'makeup', 'perfume', 'cologne',
+  'pet food', 'dog food', 'cat food', 'air freshener', 'deodorant', 'body wash'
+];
+
 export function isBasicNeed(deal: any): boolean {
   const textToSearch = `${deal?.name || ''} ${deal?.category || ''} ${deal?.subcategory || ''} ${deal?.brand || ''}`.toLowerCase();
   
-  const basicNeedKeywords = [
-    'rice', 'flour', 'sugar', 'cooking oil', 'soybean oil', 'canola oil', 'vegetable oil',
-    'dhal', 'split peas', 'toor dhal', 'moong dhal', 'lentils', 'beans',
-    'salt', 'tea', 'mackerel', 'sardines', 'milk', 'butter', 'eggs', 'chicken',
-    'gas', 'lpg', 'toilet paper', 'soap', 'sanitary pad', 'diaper', 'infant formula', 'lactogen', 's26'
+  // Exclude items that match negative keywords (e.g., "tea towel", "milk chocolate")
+  if (NEGATIVE_KEYWORDS.some(kw => textToSearch.includes(kw))) {
+    return false;
+  }
+  
+  // Match keyword if it's surrounded by non-letters (allows numbers like "rice10kg" but prevents "price" matching "rice")
+  return BASIC_NEED_KEYWORDS.some(kw => {
+    const regex = new RegExp(`(^|[^a-z])${kw}([^a-z]|$)`, 'i');
+    return regex.test(textToSearch);
+  });
+}
+
+export function isFoodItem(deal: any): boolean {
+  const textToSearch = `${deal?.name || ''} ${deal?.category || ''} ${deal?.subcategory || ''}`.toLowerCase();
+  
+  // Non-food keywords that might be in basic needs or general items
+  const nonFoodKeywords = [
+    'gas', 'lpg', 'toilet paper', 'paper towel', 'tissue', 'soap', 'detergent', 
+    'sanitary pad', 'diaper', 'shampoo', 'conditioner', 'lotion', 'cleaner',
+    'bleach', 'toothpaste', 'toothbrush', 'deodorant', 'body wash'
   ];
   
-  return basicNeedKeywords.some(kw => textToSearch.includes(kw));
+  if (nonFoodKeywords.some(kw => textToSearch.includes(kw))) {
+    return false;
+  }
+  
+  // If it's not explicitly a non-food item, and it's a basic need, it's likely food.
+  // Or we can check for food-specific categories if available, but excluding known non-food is safer for now.
+  return true;
 }

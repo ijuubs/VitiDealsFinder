@@ -262,6 +262,7 @@ export default function UploadFlyer() {
             terms_and_conditions: flyerData.terms_and_conditions,
             store_hours: flyerData.store_hours,
             traffic_status: flyerData.traffic_status,
+            uploaded_at: Date.now(),
           };
         });
 

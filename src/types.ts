@@ -55,6 +55,7 @@ export interface Deal extends Product {
   terms_and_conditions?: string;
   store_hours?: string;
   traffic_status?: string;
+  uploaded_at?: number;
 }
 
 export interface ListItem {

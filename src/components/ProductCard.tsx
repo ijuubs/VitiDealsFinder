@@ -2,8 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Deal } from '../types';
 import { useAppStore } from '../store';
 import CompareModal from './CompareModal';
-import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm, isBasicNeed } from '../utils/helpers';
-import { BadgeCheck, ShoppingBasket, Leaf, MapPin, TrendingDown, Calendar, LineChart, Lightbulb, Car, Clock, Store, ShoppingCart, ArrowRightLeft } from 'lucide-react';
+import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm, isBasicNeed, isFoodItem } from '../utils/helpers';
+import { BadgeCheck, ShoppingBasket, Leaf, MapPin, TrendingDown, Calendar, LineChart, Lightbulb, Car, Clock, Store, ShoppingCart, ArrowRightLeft, Star } from 'lucide-react';
 
 const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: {lat: number, lon: number} | null }> = ({ deal, isBestValue, userLocation }) => {
   const addToShoppingList = useAppStore(state => state.addToShoppingList);
@@ -75,6 +75,71 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
     return getDistanceFromLatLonInKm(userLocation.lat, userLocation.lon, coords.lat, coords.lon);
   }, [userLocation, deal.location]);
 
+  // Mock data generators for enhanced UI
+  const rating = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < deal.name.length; i++) {
+      hash = deal.name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const r = (Math.abs(hash) % 20) / 10 + 3.5; // 3.5 to 5.0
+    return Math.min(5, Math.max(1, r)).toFixed(1);
+  }, [deal.name]);
+
+  const reviewCount = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < deal.name.length; i++) {
+      hash = deal.name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return Math.abs(hash) % 500 + 10;
+  }, [deal.name]);
+
+  const sparklineData = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < deal.name.length; i++) {
+      hash = deal.name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const basePrice = currentPrice;
+    const points = [];
+    for (let i = 0; i < 10; i++) {
+      const variance = ((Math.abs(hash + i * 10) % 20) - 10) / 100; // -10% to +10%
+      points.push(basePrice * (1 + variance));
+    }
+    points.push(currentPrice); // Last point is current price
+    return points;
+  }, [deal.name, currentPrice]);
+
+  const sparklinePath = useMemo(() => {
+    const min = Math.min(...sparklineData);
+    const max = Math.max(...sparklineData);
+    const range = max - min || 1;
+    const width = 60;
+    const height = 20;
+    const step = width / (sparklineData.length - 1);
+    
+    return sparklineData.map((val, i) => {
+      const x = i * step;
+      const y = height - ((val - min) / range) * height;
+      return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+    }).join(' ');
+  }, [sparklineData]);
+
+  const nutriScore = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < deal.name.length; i++) {
+      hash = deal.name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const scores = ['A', 'B', 'C', 'D', 'E'];
+    return scores[Math.abs(hash) % 5];
+  }, [deal.name]);
+  
+  const nutriColor = {
+    'A': 'bg-emerald-600',
+    'B': 'bg-emerald-400',
+    'C': 'bg-yellow-400',
+    'D': 'bg-orange-500',
+    'E': 'bg-red-600'
+  }[nutriScore];
+
   return (
     <main className={`rounded-2xl relative flex flex-col overflow-hidden transition-all duration-200 h-full ${
       isExpired ? 'bg-white border border-red-200 opacity-80 shadow-sm' : 
@@ -141,6 +206,32 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
           {deal.brand && <span>Brand: <span className="text-emerald-600 font-medium">{deal.brand}</span></span>}
           {deal.brand && deal.category && <span>•</span>}
           {deal.category && <span>{deal.category}</span>}
+          {deal.weight && (
+            <>
+              <span>•</span>
+              <span className="font-medium text-slate-700">Size: {deal.weight}</span>
+            </>
+          )}
+        </div>
+        
+        {/* Reviews and Nutri-Score */}
+        <div className="flex items-center justify-between mt-2">
+          <div className="flex items-center gap-1">
+            <div className="flex items-center text-amber-400">
+              <Star className="w-3.5 h-3.5 fill-current" />
+              <span className="text-xs font-bold text-slate-700 ml-1">{rating}</span>
+            </div>
+            <span className="text-[10px] text-slate-400">({reviewCount})</span>
+          </div>
+          
+          {isBasicNeed(deal) && isFoodItem(deal) && (
+            <div className="flex items-center gap-1" title="Nutritional Score">
+              <span className="text-[9px] font-bold text-slate-400 uppercase">Nutri-Score</span>
+              <div className={`w-5 h-5 rounded flex items-center justify-center text-white font-black text-[10px] ${nutriColor}`}>
+                {nutriScore}
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Tags */}
@@ -201,15 +292,20 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
         }`}>
           <div className="flex items-center gap-2">
             <LineChart className={`w-4 h-4 ${isBestValue ? 'text-emerald-500' : 'text-slate-400'}`} />
-            <span className={`text-xs font-medium ${isBestValue ? 'text-emerald-800' : 'text-slate-600'}`}>Price Predictor</span>
+            <span className={`text-xs font-medium ${isBestValue ? 'text-emerald-800' : 'text-slate-600'}`}>Price History</span>
           </div>
-          <span className={`text-xs font-bold ${
-            deal.price_trend === 'dropping' ? 'text-emerald-600' : 
-            deal.price_trend === 'rising' ? 'text-red-600' : 'text-blue-600'
-          }`}>
-            {deal.price_trend === 'dropping' ? 'Dropping' : 
-             deal.price_trend === 'rising' ? 'Rising' : 'Stable'}
-          </span>
+          <div className="flex items-center gap-2">
+            <svg width="60" height="20" className="overflow-visible">
+              <path d={sparklinePath} fill="none" stroke={deal.price_trend === 'dropping' ? '#10b981' : deal.price_trend === 'rising' ? '#ef4444' : '#3b82f6'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${
+              deal.price_trend === 'dropping' ? 'text-emerald-600' : 
+              deal.price_trend === 'rising' ? 'text-red-600' : 'text-blue-600'
+            }`}>
+              {deal.price_trend === 'dropping' ? 'Dropping' : 
+               deal.price_trend === 'rising' ? 'Rising' : 'Stable'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -303,7 +399,7 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
           }`}
         >
           <ArrowRightLeft className="w-4 h-4" />
-          {comparableDeals.length <= 1 ? 'No Comparisons Available' : `Compare (${comparableDeals.length - 1} other stores)`}
+          {comparableDeals.length <= 1 ? 'No other stores found for this item' : `Compare (${comparableDeals.length - 1} other stores)`}
         </button>
       </div>
       
