@@ -12,8 +12,11 @@ import { useAppStore } from './store';
 export default function App() {
   const syncOfflineDeals = useAppStore(state => state.syncOfflineDeals);
   const fetchDealsFromSupabase = useAppStore(state => state.fetchDealsFromSupabase);
+  const initializeAuth = useAppStore(state => state.initializeAuth);
 
   useEffect(() => {
+    initializeAuth();
+    
     const handleOnline = () => {
       console.log('App is back online. Synchronizing offline deals...');
       syncOfflineDeals();

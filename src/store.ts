@@ -18,6 +18,7 @@ const idbStorage: StateStorage = {
 };
 
 interface AppState {
+  user: any | null;
   deals: Deal[];
   shoppingList: ListItem[];
   pendingOfflineDeals: Deal[];
@@ -27,6 +28,10 @@ interface AppState {
   monthlyGoal: number;
   priceAlerts: { productId: string, targetPrice: number }[];
   compareList: Deal[];
+  setUser: (user: any | null) => void;
+  initializeAuth: () => void;
+  signOut: () => Promise<void>;
+  fetchUserDataFromSupabase: () => Promise<void>;
   addDeals: (newDeals: Deal[]) => void;
   addToShoppingList: (deal: Deal) => void;
   removeFromShoppingList: (productId: string) => void;
@@ -49,6 +54,7 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
+      user: null,
       deals: initialDeals,
       shoppingList: [],
       pendingOfflineDeals: [],
@@ -58,6 +64,65 @@ export const useAppStore = create<AppState>()(
       monthlyGoal: 500,
       priceAlerts: [],
       compareList: [],
+      setUser: (user) => set({ user }),
+      initializeAuth: () => {
+        if (!supabase) return;
+        
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          set({ user: session?.user ?? null });
+          if (session?.user) {
+            get().fetchUserDataFromSupabase();
+          }
+        });
+
+        supabase.auth.onAuthStateChange((_event, session) => {
+          set({ user: session?.user ?? null });
+          if (session?.user) {
+            get().fetchUserDataFromSupabase();
+          } else {
+            // Clear user data on sign out
+            set({ shoppingList: [], savingsHistory: [], priceAlerts: [] });
+          }
+        });
+      },
+      signOut: async () => {
+        if (!supabase) return;
+        await supabase.auth.signOut();
+      },
+      fetchUserDataFromSupabase: async () => {
+        const state = get();
+        if (!supabase || !state.user) return;
+        
+        try {
+          // Fetch shopping list
+          const { data: shoppingListData } = await supabase
+            .from('shopping_lists')
+            .select('*')
+            .eq('user_id', state.user.id)
+            .single();
+            
+          if (shoppingListData && shoppingListData.items) {
+            set({ shoppingList: shoppingListData.items });
+          }
+
+          // Fetch user profile (savings, goal, alerts)
+          const { data: profileData } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('user_id', state.user.id)
+            .single();
+            
+          if (profileData) {
+            set({ 
+              savingsHistory: profileData.savings_history || [],
+              monthlyGoal: profileData.monthly_goal || 500,
+              priceAlerts: profileData.price_alerts || []
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching user data from Supabase:', error);
+        }
+      },
       addDeals: async (newDeals) => {
         const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
         
@@ -156,27 +221,83 @@ export const useAppStore = create<AppState>()(
       },
       addToShoppingList: (deal) => set((state) => {
         const existing = state.shoppingList.find(item => item.product_id === deal.product_id);
+        let newList;
         if (existing) {
-          return {
-            shoppingList: state.shoppingList.map(item =>
-              item.product_id === deal.product_id ? { ...item, quantity: item.quantity + 1 } : item
-            )
-          };
+          newList = state.shoppingList.map(item =>
+            item.product_id === deal.product_id ? { ...item, quantity: item.quantity + 1 } : item
+          );
+        } else {
+          newList = [...state.shoppingList, { product_id: deal.product_id, quantity: 1, deal }];
         }
-        return { shoppingList: [...state.shoppingList, { product_id: deal.product_id, quantity: 1, deal }] };
+        
+        if (state.user && supabase) {
+          supabase.from('shopping_lists').upsert({
+            user_id: state.user.id,
+            items: newList,
+            updated_at: new Date().toISOString()
+          }).then(({ error }) => {
+            if (error) console.error('Error syncing shopping list:', error);
+          });
+        }
+        
+        return { shoppingList: newList };
       }),
-      removeFromShoppingList: (productId) => set((state) => ({
-        shoppingList: state.shoppingList.filter(item => item.product_id !== productId)
-      })),
-      clearShoppingList: () => set({ shoppingList: [] }),
-      updateQuantity: (productId, quantity) => set((state) => ({
-        shoppingList: state.shoppingList.map(item =>
+      removeFromShoppingList: (productId) => set((state) => {
+        const newList = state.shoppingList.filter(item => item.product_id !== productId);
+        
+        if (state.user && supabase) {
+          supabase.from('shopping_lists').upsert({
+            user_id: state.user.id,
+            items: newList,
+            updated_at: new Date().toISOString()
+          }).then(({ error }) => {
+            if (error) console.error('Error syncing shopping list:', error);
+          });
+        }
+        
+        return { shoppingList: newList };
+      }),
+      clearShoppingList: () => set((state) => {
+        if (state.user && supabase) {
+          supabase.from('shopping_lists').upsert({
+            user_id: state.user.id,
+            items: [],
+            updated_at: new Date().toISOString()
+          }).then(({ error }) => {
+            if (error) console.error('Error syncing shopping list:', error);
+          });
+        }
+        return { shoppingList: [] };
+      }),
+      updateQuantity: (productId, quantity) => set((state) => {
+        const newList = state.shoppingList.map(item =>
           item.product_id === productId ? { ...item, quantity } : item
-        )
-      })),
-      optimizeShoppingList: (newItems) => set(() => ({
-        shoppingList: newItems
-      })),
+        );
+        
+        if (state.user && supabase) {
+          supabase.from('shopping_lists').upsert({
+            user_id: state.user.id,
+            items: newList,
+            updated_at: new Date().toISOString()
+          }).then(({ error }) => {
+            if (error) console.error('Error syncing shopping list:', error);
+          });
+        }
+        
+        return { shoppingList: newList };
+      }),
+      optimizeShoppingList: (newItems) => set((state) => {
+        if (state.user && supabase) {
+          supabase.from('shopping_lists').upsert({
+            user_id: state.user.id,
+            items: newItems,
+            updated_at: new Date().toISOString()
+          }).then(({ error }) => {
+            if (error) console.error('Error syncing shopping list:', error);
+          });
+        }
+        return { shoppingList: newItems };
+      }),
       syncOfflineDeals: async () => {
         const state = get();
         if (state.pendingOfflineDeals.length > 0) {
@@ -218,16 +339,71 @@ export const useAppStore = create<AppState>()(
       },
       setUserLocation: (location) => set({ userLocation: location }),
       setSelectedRegion: (region) => set({ selectedRegion: region }),
-      addSavings: (amount) => set((state) => ({
-        savingsHistory: [...state.savingsHistory, { amount, date: new Date().toISOString() }]
-      })),
-      setMonthlyGoal: (goal) => set({ monthlyGoal: goal }),
-      addPriceAlert: (productId, targetPrice) => set((state) => ({
-        priceAlerts: [...state.priceAlerts.filter(a => a.productId !== productId), { productId, targetPrice }]
-      })),
-      removePriceAlert: (productId) => set((state) => ({
-        priceAlerts: state.priceAlerts.filter(a => a.productId !== productId)
-      })),
+      addSavings: (amount) => set((state) => {
+        const newHistory = [...state.savingsHistory, { amount, date: new Date().toISOString() }];
+        
+        if (state.user && supabase) {
+          supabase.from('user_profiles').upsert({
+            user_id: state.user.id,
+            savings_history: newHistory,
+            monthly_goal: state.monthlyGoal,
+            price_alerts: state.priceAlerts,
+            updated_at: new Date().toISOString()
+          }).then(({ error }) => {
+            if (error) console.error('Error syncing savings history:', error);
+          });
+        }
+        
+        return { savingsHistory: newHistory };
+      }),
+      setMonthlyGoal: (goal) => set((state) => {
+        if (state.user && supabase) {
+          supabase.from('user_profiles').upsert({
+            user_id: state.user.id,
+            savings_history: state.savingsHistory,
+            monthly_goal: goal,
+            price_alerts: state.priceAlerts,
+            updated_at: new Date().toISOString()
+          }).then(({ error }) => {
+            if (error) console.error('Error syncing monthly goal:', error);
+          });
+        }
+        return { monthlyGoal: goal };
+      }),
+      addPriceAlert: (productId, targetPrice) => set((state) => {
+        const newAlerts = [...state.priceAlerts.filter(a => a.productId !== productId), { productId, targetPrice }];
+        
+        if (state.user && supabase) {
+          supabase.from('user_profiles').upsert({
+            user_id: state.user.id,
+            savings_history: state.savingsHistory,
+            monthly_goal: state.monthlyGoal,
+            price_alerts: newAlerts,
+            updated_at: new Date().toISOString()
+          }).then(({ error }) => {
+            if (error) console.error('Error syncing price alerts:', error);
+          });
+        }
+        
+        return { priceAlerts: newAlerts };
+      }),
+      removePriceAlert: (productId) => set((state) => {
+        const newAlerts = state.priceAlerts.filter(a => a.productId !== productId);
+        
+        if (state.user && supabase) {
+          supabase.from('user_profiles').upsert({
+            user_id: state.user.id,
+            savings_history: state.savingsHistory,
+            monthly_goal: state.monthlyGoal,
+            price_alerts: newAlerts,
+            updated_at: new Date().toISOString()
+          }).then(({ error }) => {
+            if (error) console.error('Error syncing price alerts:', error);
+          });
+        }
+        
+        return { priceAlerts: newAlerts };
+      }),
       addToCompareList: (deal) => set((state) => {
         if (state.compareList.find(d => d.product_id === deal.product_id)) return state;
         if (state.compareList.length >= 4) return state; // Limit to 4 items

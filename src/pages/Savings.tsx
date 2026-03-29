@@ -1,13 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { Award, TrendingUp, History, Bell, MapPin, BarChart2, Edit2, X, CheckCircle2 } from 'lucide-react';
+import { Award, TrendingUp, History, Bell, MapPin, BarChart2, Edit2, X, CheckCircle2, LogOut, LogIn } from 'lucide-react';
 import { useAppStore } from '../store';
+import AuthModal from '../components/AuthModal';
 
 export default function Savings() {
   const savingsHistory = useAppStore(state => state.savingsHistory);
   const monthlyGoal = useAppStore(state => state.monthlyGoal);
   const setMonthlyGoal = useAppStore(state => state.setMonthlyGoal);
+  const user = useAppStore(state => state.user);
+  const signOut = useAppStore(state => state.signOut);
 
   const [showGoalModal, setShowGoalModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [newGoalValue, setNewGoalValue] = useState(monthlyGoal.toString());
 
   const currentMonth = new Date().getMonth();
@@ -43,9 +47,30 @@ export default function Savings() {
 
   return (
     <div className="max-w-md mx-auto pb-6 space-y-8">
-      <div>
-        <h1 className="text-3xl font-black text-slate-900 font-display tracking-tight">Bula!</h1>
-        <p className="text-slate-500 mt-1 font-medium">Your digital curator is tracking your savings.</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 font-display tracking-tight">
+            {user ? `Bula, ${user.email?.split('@')[0]}!` : 'Bula!'}
+          </h1>
+          <p className="text-slate-500 mt-1 font-medium">Your digital curator is tracking your savings.</p>
+        </div>
+        {user ? (
+          <button 
+            onClick={() => signOut()}
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </button>
+        ) : (
+          <button 
+            onClick={() => setShowAuthModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-colors"
+          >
+            <LogIn className="w-4 h-4" />
+            Sign In
+          </button>
+        )}
       </div>
 
       <div className="bg-gradient-to-br from-[#0097b2] to-[#007b99] text-white rounded-[2rem] p-8 shadow-lg shadow-cyan-900/20 relative overflow-hidden">
@@ -218,6 +243,8 @@ export default function Savings() {
           </div>
         </div>
       )}
+
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
     </div>
   );
 }
