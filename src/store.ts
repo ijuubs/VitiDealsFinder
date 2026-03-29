@@ -20,11 +20,28 @@ interface AppState {
   deals: Deal[];
   shoppingList: ListItem[];
   pendingOfflineDeals: Deal[];
+  userLocation: { lat: number, lon: number } | null;
+  selectedRegion: string;
+  savingsHistory: { amount: number, date: string }[];
+  monthlyGoal: number;
+  priceAlerts: { productId: string, targetPrice: number }[];
+  compareList: Deal[];
   addDeals: (newDeals: Deal[]) => void;
   addToShoppingList: (deal: Deal) => void;
   removeFromShoppingList: (productId: string) => void;
+  clearShoppingList: () => void;
   updateQuantity: (productId: string, quantity: number) => void;
+  optimizeShoppingList: (newItems: ListItem[]) => void;
   syncOfflineDeals: () => Promise<void>;
+  setUserLocation: (location: { lat: number, lon: number } | null) => void;
+  setSelectedRegion: (region: string) => void;
+  addSavings: (amount: number) => void;
+  setMonthlyGoal: (goal: number) => void;
+  addPriceAlert: (productId: string, targetPrice: number) => void;
+  removePriceAlert: (productId: string) => void;
+  addToCompareList: (deal: Deal) => void;
+  removeFromCompareList: (productId: string) => void;
+  clearCompareList: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -33,6 +50,12 @@ export const useAppStore = create<AppState>()(
       deals: initialDeals,
       shoppingList: [],
       pendingOfflineDeals: [],
+      userLocation: null,
+      selectedRegion: 'current',
+      savingsHistory: [],
+      monthlyGoal: 500,
+      priceAlerts: [],
+      compareList: [],
       addDeals: (newDeals) => set((state) => {
         const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
         
@@ -64,10 +87,14 @@ export const useAppStore = create<AppState>()(
       removeFromShoppingList: (productId) => set((state) => ({
         shoppingList: state.shoppingList.filter(item => item.product_id !== productId)
       })),
+      clearShoppingList: () => set({ shoppingList: [] }),
       updateQuantity: (productId, quantity) => set((state) => ({
         shoppingList: state.shoppingList.map(item =>
           item.product_id === productId ? { ...item, quantity } : item
         )
+      })),
+      optimizeShoppingList: (newItems) => set(() => ({
+        shoppingList: newItems
       })),
       syncOfflineDeals: async () => {
         const state = get();
@@ -108,6 +135,27 @@ export const useAppStore = create<AppState>()(
           }
         }
       },
+      setUserLocation: (location) => set({ userLocation: location }),
+      setSelectedRegion: (region) => set({ selectedRegion: region }),
+      addSavings: (amount) => set((state) => ({
+        savingsHistory: [...state.savingsHistory, { amount, date: new Date().toISOString() }]
+      })),
+      setMonthlyGoal: (goal) => set({ monthlyGoal: goal }),
+      addPriceAlert: (productId, targetPrice) => set((state) => ({
+        priceAlerts: [...state.priceAlerts.filter(a => a.productId !== productId), { productId, targetPrice }]
+      })),
+      removePriceAlert: (productId) => set((state) => ({
+        priceAlerts: state.priceAlerts.filter(a => a.productId !== productId)
+      })),
+      addToCompareList: (deal) => set((state) => {
+        if (state.compareList.find(d => d.product_id === deal.product_id)) return state;
+        if (state.compareList.length >= 4) return state; // Limit to 4 items
+        return { compareList: [...state.compareList, deal] };
+      }),
+      removeFromCompareList: (productId) => set((state) => ({
+        compareList: state.compareList.filter(d => d.product_id !== productId)
+      })),
+      clearCompareList: () => set({ compareList: [] }),
     }),
     {
       name: 'fiji-smart-deals-storage',

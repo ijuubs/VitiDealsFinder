@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { jsonrepair } from "jsonrepair";
 import { FlyerData, Deal } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -70,12 +71,19 @@ IMPORTANT: Keep your response concise. Limit your suggested products to a maximu
   try {
     return JSON.parse(responseText);
   } catch (e) {
-    console.error("Failed to parse JSON response:", responseText);
-    throw new Error("Failed to parse response from Gemini");
+    console.warn("Failed to parse JSON response directly, attempting to repair...", e);
+    try {
+      const repairedJson = jsonrepair(responseText);
+      return JSON.parse(repairedJson);
+    } catch (repairError) {
+      console.error("Failed to repair JSON response:", responseText);
+      throw new Error("Failed to parse response from Gemini");
+    }
   }
 }
 
-const SYSTEM_INSTRUCTION = `You are a specialist in extracting product deals from Fiji supermarket flyers (RB Patel, MH, MaxVal-u, New World IGA, Shop N Save, Extra).
+const SYSTEM_INSTRUCTION = `
+You are a specialist in extracting product deals from Fiji supermarket flyers (RB Patel, MH, MaxVal-u, New World IGA).
 
 LAYOUT TYPES:
 1. GRID: Multiple products in tiles (most common)
@@ -95,17 +103,22 @@ CRITICAL RULES:
    - Chicken: #12, #14, #16
    - Multi-pack: "3 x 200g"
    - Volume: 750ml, 1L, 1.5L
-4. BOUNDING BOX RULES (CRITICAL FOR IMAGE EXTRACTION):
-   - You MUST provide a highly accurate bounding_box for EVERY product.
+4. BOUNDING BOX must be TIGHT around the product image, excluding:
+   - Price bubbles
+   - Category headers above the tile
+   - Neighboring products
    - Format: [ymin, xmin, ymax, xmax] where each value is an integer from 0 to 1000 representing the relative position in the image.
-   - The box MUST tightly enclose the product image, its name, and its price.
-   - DO NOT overlap bounding boxes. Each box must strictly contain ONLY the single product and its immediate price tag, excluding neighboring products.
-   - For HERO layouts (single product): bbox = full image minus margins.
+5. For HERO layouts (single product): bbox = full image minus margins
 
 FIJI-SPECIFIC BRANDS TO RECOGNIZE:
 - Premium Island, Annalisa, Leggo's, Tim Tam, Cadbury, Mutti, Heinz, Kikkoman, 
   Arnott's, Community Co, Homegrown, Soltuna, Devondale, Tiffin, JC's, Nobby's, 
   Oreo, Red Rock Deli, Smirnoff, Tribe, Absolut, Malibu, Jim Beam, FMF, Rooster, Pacific Mac, Maharani.
+
+OUTPUT:
+- One deal per tile/product
+- Tight bounding boxes
+- Clean product names (no sizes, prices, or categories mixed in)
 
 EXTRACTION RULES:
 1. OCR ACCURACY: Extract text EXACTLY as it appears. Pay close attention to prices, weights, and product names.
@@ -119,22 +132,30 @@ EXTRACTION RULES:
 9. PROMOTION DETECTION: Detect "Special", "Save", "Deal", bulk offers. Set deal_type = ["discount", "bundle", "standard"].
 10. STORE + LOCATION: Extract store name and branch/location accurately. If multiple locations, list them or pick the primary one.
 11. DATE EXTRACTION: Parse dates and convert to ISO format. Look for "Valid from X to Y" or "Specials end Z".
-12. TERMS AND CONDITIONS: Extract any fine print, limits (e.g., "Max 3 per customer"), or conditions.`;
+12. TERMS AND CONDITIONS: Extract any fine print, limits (e.g., "Max 3 per customer"), or conditions.
+13. LIMIT: Extract a maximum of 40 products per flyer to prevent data truncation. Prioritize the most prominent deals.
+14. DIETARY & ALLERGEN TAGGING: Automatically tag products with badges like "Halal", "Vegetarian", "Vegan", "High Sugar", "Gluten-Free", "Dairy-Free" based on the brand, product name, and common knowledge.
+`;
 
 export async function extractDealsFromFlyer(base64Image: string, mimeType: string): Promise<FlyerData> {
   const extractionPromise = ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: [
-      {
-        inlineData: {
-          data: base64Image,
-          mimeType: mimeType,
+    contents: {
+      parts: [
+        {
+          inlineData: {
+            data: base64Image,
+            mimeType: mimeType,
+          },
         },
-      },
-      "Extract all deals from this supermarket flyer according to the system instructions. Return the data as a structured JSON object.",
-    ],
+        {
+          text: "Extract all deals from this supermarket flyer according to the system instructions. Return the data as a structured JSON object.",
+        }
+      ]
+    },
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
+      maxOutputTokens: 8192,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -161,7 +182,6 @@ export async function extractDealsFromFlyer(base64Image: string, mimeType: strin
                 brand: { type: Type.STRING, nullable: true },
                 category: { type: Type.STRING },
                 subcategory: { type: Type.STRING },
-                description: { type: Type.STRING, nullable: true },
                 variants: {
                   type: Type.ARRAY,
                   nullable: true,
@@ -181,20 +201,18 @@ export async function extractDealsFromFlyer(base64Image: string, mimeType: strin
                 price_per_unit: { type: Type.NUMBER, nullable: true },
                 currency: { type: Type.STRING },
                 deal_type: { type: Type.STRING },
-                image_reference: { type: Type.STRING, nullable: true },
+                tags: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  nullable: true,
+                  description: "Dietary and allergen tags like 'Halal', 'Vegetarian', 'High Sugar', etc."
+                },
                 bounding_box: { 
                   type: Type.ARRAY, 
                   items: { type: Type.NUMBER }, 
                   description: "[ymin, xmin, ymax, xmax] coordinates scaled 0-1000",
                   nullable: true
-                },
-                confidence: { type: Type.NUMBER, description: "Confidence score 0-1" },
-                origin: { type: Type.STRING, nullable: true, description: "Country of origin if mentioned (e.g., Fiji, Italy, Australia)" },
-                is_local: { type: Type.BOOLEAN, nullable: true, description: "True if the product is locally produced in Fiji" },
-                nutri_score: { type: Type.STRING, nullable: true, description: "Nutri-score if mentioned (A, B, C, D, E)" },
-                in_stock: { type: Type.BOOLEAN, nullable: true, description: "Assume true unless explicitly marked out of stock" },
-                verified: { type: Type.BOOLEAN, nullable: true, description: "Assume true if clearly visible on flyer" },
-                price_trend: { type: Type.STRING, nullable: true, description: "One of: stable, dropping, rising. Infer from context if possible, otherwise stable." }
+                }
               },
             },
           },
@@ -203,16 +221,66 @@ export async function extractDealsFromFlyer(base64Image: string, mimeType: strin
     },
   });
 
-  // Add a 60-second timeout
+  // Add a 300-second timeout
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error("Extraction timed out after 60 seconds. Please try again with a smaller image or better connection.")), 60000);
+    setTimeout(() => reject(new Error("Extraction timed out after 300 seconds. Please try again with a smaller image or better connection.")), 300000);
   });
 
   const response = await Promise.race([extractionPromise, timeoutPromise]);
 
-  if (!response.text) {
+  let responseText = response.text;
+  if (!responseText) {
     throw new Error("No response from Gemini");
   }
 
-  return JSON.parse(response.text) as FlyerData;
+  // Sometimes the model wraps JSON in markdown blocks even with responseMimeType set
+  responseText = responseText.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '');
+
+  try {
+    return JSON.parse(responseText) as FlyerData;
+  } catch (e) {
+    console.warn("Failed to parse JSON directly, attempting to repair...", e);
+    console.warn("Finish reason:", response.candidates?.[0]?.finishReason);
+    
+    try {
+      const repairedJson = jsonrepair(responseText);
+      return JSON.parse(repairedJson) as FlyerData;
+    } catch (repairError) {
+      console.error("Failed to repair JSON:", repairError);
+      
+      // Fallback: The JSON might be severely truncated. Try to find the last complete object in the products array.
+      try {
+        console.log("Attempting fallback truncation repair...");
+        // Find the last occurrence of '}, {' (with optional whitespace) which strongly indicates the boundary between two products
+        const matches = [...responseText.matchAll(/\}\s*,\s*\{/g)];
+        
+        if (matches.length > 0) {
+          const lastMatch = matches[matches.length - 1];
+          // lastMatch.index is the index of the '}'
+          if (lastMatch.index !== undefined) {
+            // Truncate at the boundary (keep the '}') and close the array and main object
+            const truncatedText = responseText.substring(0, lastMatch.index + 1) + ']}';
+            const repairedTruncated = jsonrepair(truncatedText);
+            const parsed = JSON.parse(repairedTruncated) as FlyerData;
+            console.log(`Fallback repair successful. Recovered ${parsed.products?.length || 0} products.`);
+            return parsed;
+          }
+        }
+        
+        // If regex fails, try just '},'
+        const lastCompleteObjIndex = responseText.lastIndexOf('},');
+        if (lastCompleteObjIndex > 0) {
+          const truncatedText = responseText.substring(0, lastCompleteObjIndex + 1) + ']}';
+          const repairedTruncated = jsonrepair(truncatedText);
+          const parsed = JSON.parse(repairedTruncated) as FlyerData;
+          console.log(`Fallback repair successful. Recovered ${parsed.products?.length || 0} products.`);
+          return parsed;
+        }
+      } catch (fallbackError) {
+        console.error("Fallback repair failed:", fallbackError);
+      }
+      
+      throw new Error("Failed to parse response from Gemini. The flyer might be too large or complex.");
+    }
+  }
 }

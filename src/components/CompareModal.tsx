@@ -8,36 +8,66 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
   const allDeals = useAppStore(state => state.deals);
   const shoppingList = useAppStore(state => state.shoppingList);
   const addToShoppingList = useAppStore(state => state.addToShoppingList);
+  const userLocation = useAppStore(state => state.userLocation);
+  const selectedRegion = useAppStore(state => state.selectedRegion);
+  const priceAlerts = useAppStore(state => state.priceAlerts);
+  const addPriceAlert = useAppStore(state => state.addPriceAlert);
+  const removePriceAlert = useAppStore(state => state.removePriceAlert);
   
-  const [userLocation, setUserLocation] = useState<{lat: number, lon: number} | null>(null);
   const [isImageZoomed, setIsImageZoomed] = useState(false);
   const [showAlertSet, setShowAlertSet] = useState(false);
+  const [alertPriceInput, setAlertPriceInput] = useState('');
+
+  const currentPrice = getEffectivePrice(deal);
+
+  const existingAlert = priceAlerts.find(a => a.productId === deal.product_id);
 
   useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lon: position.coords.longitude
-          });
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-        }
-      );
+    if (showAlertSet) {
+      setAlertPriceInput(existingAlert ? existingAlert.targetPrice.toFixed(2) : (currentPrice * 0.9).toFixed(2));
     }
-  }, []);
+  }, [showAlertSet, existingAlert, currentPrice]);
+
+  const handleSetAlert = () => {
+    const targetPrice = parseFloat(alertPriceInput);
+    if (!isNaN(targetPrice) && targetPrice > 0) {
+      addPriceAlert(deal.product_id, targetPrice);
+      setShowAlertSet(false);
+    }
+  };
+
+  const handleRemoveAlert = () => {
+    removePriceAlert(deal.product_id);
+    setShowAlertSet(false);
+  };
 
   const comparableDeals = useMemo(() => {
-    return allDeals.filter(d => d.name.toLowerCase().trim() === deal.name.toLowerCase().trim());
-  }, [allDeals, deal.name]);
+    const regionCoords = selectedRegion !== 'all' && selectedRegion !== 'current' ? getStoreCoordinates(selectedRegion) : null;
+
+    return allDeals.filter(d => {
+      if (d?.name?.toLowerCase().trim() !== deal?.name?.toLowerCase().trim()) return false;
+      if (d.product_id === deal.product_id) return true; // Always include the current deal
+      
+      let distance = Infinity;
+      const coords = getStoreCoordinates(d.location);
+      if (coords) {
+        if (selectedRegion === 'current' && userLocation) {
+          distance = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lon, coords.lat, coords.lon);
+        } else if (regionCoords) {
+          distance = getDistanceFromLatLonInKm(regionCoords.lat, regionCoords.lon, coords.lat, coords.lon);
+        }
+      }
+
+      if (selectedRegion === 'all') return true;
+      if (selectedRegion === 'current' && !userLocation) return true;
+      return distance <= 50 || distance === Infinity;
+    });
+  }, [allDeals, deal.name, deal.product_id, selectedRegion, userLocation]);
 
   const sortedDeals = [...comparableDeals].sort((a, b) => getEffectivePrice(a) - getEffectivePrice(b));
   
   const bestDeal = sortedDeals[0];
   const bestPrice = getEffectivePrice(bestDeal);
-  const currentPrice = getEffectivePrice(deal);
   
   const averagePrice = sortedDeals.reduce((acc, d) => acc + getEffectivePrice(d), 0) / sortedDeals.length;
   
@@ -48,17 +78,23 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
 
   // Add distance to all sorted deals
   const dealsWithDistance = useMemo(() => {
+    const regionCoords = selectedRegion !== 'all' && selectedRegion !== 'current' ? getStoreCoordinates(selectedRegion) : null;
+
     return sortedDeals.map(d => {
       let distance = Infinity;
-      if (userLocation) {
-        const coords = getStoreCoordinates(d.location);
-        if (coords) {
+      const coords = getStoreCoordinates(d.location);
+      if (coords) {
+        if (selectedRegion === 'current' && userLocation) {
+          distance = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lon, coords.lat, coords.lon);
+        } else if (regionCoords) {
+          distance = getDistanceFromLatLonInKm(regionCoords.lat, regionCoords.lon, coords.lat, coords.lon);
+        } else if (userLocation) {
           distance = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lon, coords.lat, coords.lon);
         }
       }
       return { ...d, distance };
     });
-  }, [sortedDeals, userLocation]);
+  }, [sortedDeals, userLocation, selectedRegion]);
 
   // Find Closest Best Deal
   const closestBestDeal = useMemo(() => {
@@ -70,7 +106,9 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
 
   // Find Best Local Deal (within 20km)
   const bestLocalDeal = useMemo(() => {
-    if (!userLocation) return null;
+    if (selectedRegion === 'current' && !userLocation) return null;
+    if (selectedRegion === 'all' && !userLocation) return null;
+    
     const localDeals = dealsWithDistance.filter(d => d.distance < 20);
     if (localDeals.length === 0) return null;
     
@@ -82,25 +120,35 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
     });
     
     return localDeals[0];
-  }, [dealsWithDistance, userLocation]);
+  }, [dealsWithDistance, userLocation, selectedRegion]);
 
   // Similar Products (Same category, different name, nearby)
   const similarProducts = useMemo(() => {
     if (!deal.category) return [];
     
+    const regionCoords = selectedRegion !== 'all' && selectedRegion !== 'current' ? getStoreCoordinates(selectedRegion) : null;
+
     const similar = allDeals
-      .filter(d => d.category === deal.category && d.name.toLowerCase().trim() !== deal.name.toLowerCase().trim())
+      .filter(d => d.category === deal.category && d?.name?.toLowerCase().trim() !== deal?.name?.toLowerCase().trim())
       .map(d => {
         let distance = Infinity;
-        if (userLocation) {
-          const coords = getStoreCoordinates(d.location);
-          if (coords) {
+        const coords = getStoreCoordinates(d.location);
+        if (coords) {
+          if (selectedRegion === 'current' && userLocation) {
+            distance = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lon, coords.lat, coords.lon);
+          } else if (regionCoords) {
+            distance = getDistanceFromLatLonInKm(regionCoords.lat, regionCoords.lon, coords.lat, coords.lon);
+          } else if (userLocation) {
             distance = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lon, coords.lat, coords.lon);
           }
         }
         return { ...d, distance };
       })
-      .filter(d => d.distance < 20) // Only nearby
+      .filter(d => {
+        if (selectedRegion === 'all') return true;
+        if (selectedRegion === 'current' && !userLocation) return true;
+        return d.distance <= 50 || d.distance === Infinity; // Use 50km to match the main view
+      })
       .sort((a, b) => getEffectivePrice(a) - getEffectivePrice(b));
 
     // Deduplicate by name to show variety
@@ -114,7 +162,7 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
       }
     }
     return uniqueSimilar;
-  }, [allDeals, deal, userLocation]);
+  }, [allDeals, deal, userLocation, selectedRegion]);
 
   // Smart Insight Engine
   const smartInsight = useMemo(() => {
@@ -129,13 +177,29 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
     }
   }, [currentPrice, bestPrice, hasMultipleStores, absoluteSavings, bestDeal.store]);
 
-  // Mock Price History
+  // Real Price History Insight
   const priceHistory = useMemo(() => {
-    const avg30Days = averagePrice * 1.05; // mock
-    const minPrice = bestPrice * 0.9; // mock
-    const maxPrice = averagePrice * 1.2; // mock
-    return { avg30Days, minPrice, maxPrice };
-  }, [averagePrice, bestPrice]);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const historicalDeals = allDeals.filter(d => {
+      if (d?.name?.toLowerCase().trim() !== deal?.name?.toLowerCase().trim()) return false;
+      if (!d.start_date) return true;
+      const dealDate = new Date(d.start_date);
+      return dealDate >= thirtyDaysAgo;
+    });
+
+    if (historicalDeals.length === 0) {
+      return { avg30Days: currentPrice, minPrice: currentPrice, maxPrice: currentPrice, count: 1 };
+    }
+
+    const prices = historicalDeals.map(d => getEffectivePrice(d));
+    const avg30Days = prices.reduce((a, b) => a + b, 0) / prices.length;
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+
+    return { avg30Days, minPrice, maxPrice, count: historicalDeals.length };
+  }, [allDeals, deal.name, currentPrice]);
 
   const { pricePerKg, unit } = getNormalizedPrice(deal);
 
@@ -146,10 +210,10 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
 
     // Calculate potential savings for items already in the list
     shoppingList.forEach(item => {
-      const normalizedName = item.deal.name.toLowerCase().trim();
+      const normalizedName = item.deal?.name?.toLowerCase().trim() || '';
       processedProductNames.add(normalizedName);
 
-      const itemDeals = allDeals.filter(d => d.name.toLowerCase().trim() === normalizedName);
+      const itemDeals = allDeals.filter(d => d?.name?.toLowerCase().trim() === normalizedName);
       if (itemDeals.length > 1) {
         const avg = itemDeals.reduce((acc, d) => acc + getEffectivePrice(d), 0) / itemDeals.length;
         const cheapest = Math.min(...itemDeals.map(d => getEffectivePrice(d)));
@@ -161,7 +225,7 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
     });
 
     // Add potential savings for the current item if it's not in the list
-    const currentNormalizedName = deal.name.toLowerCase().trim();
+    const currentNormalizedName = deal?.name?.toLowerCase().trim() || '';
     if (!processedProductNames.has(currentNormalizedName)) {
       if (hasMultipleStores) {
         const maxSavingsForCurrent = averagePrice - bestPrice;
@@ -202,8 +266,16 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
         <div className="bg-slate-50 rounded-3xl max-w-2xl w-full relative max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
           {/* Header Actions */}
           <div className="absolute top-4 right-4 z-10 flex gap-2">
-            <button onClick={() => setShowAlertSet(true)} className="w-8 h-8 bg-white/80 backdrop-blur-md rounded-full flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-all shadow-sm" title="Set Price Alert">
-              <Bell className="w-4 h-4" />
+            <button 
+              onClick={() => setShowAlertSet(true)} 
+              className={`w-8 h-8 backdrop-blur-md rounded-full flex items-center justify-center transition-all shadow-sm ${
+                existingAlert 
+                  ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' 
+                  : 'bg-white/80 text-slate-500 hover:text-blue-600 hover:bg-blue-50'
+              }`} 
+              title={existingAlert ? 'Update Price Alert' : 'Set Price Alert'}
+            >
+              <Bell className={`w-4 h-4 ${existingAlert ? 'fill-current' : ''}`} />
             </button>
             <button onClick={onClose} className="w-8 h-8 bg-white/80 backdrop-blur-md rounded-full flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-white transition-all shadow-sm">
               <X className="w-5 h-5" />
@@ -250,6 +322,20 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
                         <ShoppingBag className="w-3 h-3" /> Basic Need
                       </span>
                     )}
+                    {deal.tags?.map((tag, idx) => {
+                      let colorClass = "bg-slate-100 text-slate-700";
+                      const lowerTag = tag.toLowerCase();
+                      if (lowerTag.includes('halal')) colorClass = "bg-blue-100 text-blue-700";
+                      else if (lowerTag.includes('veg') || lowerTag.includes('plant')) colorClass = "bg-green-100 text-green-700";
+                      else if (lowerTag.includes('sugar')) colorClass = "bg-red-100 text-red-700";
+                      else if (lowerTag.includes('free')) colorClass = "bg-purple-100 text-purple-700";
+                      
+                      return (
+                        <span key={idx} className={`${colorClass} text-xs font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider`}>
+                          {tag}
+                        </span>
+                      );
+                    })}
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight mb-2">{deal.name}</h2>
                   {deal.weight && <p className="text-slate-500 font-medium">{deal.weight}</p>}
@@ -351,17 +437,22 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
               )}
 
               {/* Total Savings Potential */}
-              <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex items-start gap-3">
-                <div className="bg-purple-100 p-2 rounded-xl text-purple-600 flex-shrink-0">
-                  <ListPlus className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-purple-900">Total Savings Potential</h4>
-                  <p className="text-purple-800 text-sm mt-0.5">
-                    If you buy all items on your list (plus this one) at their cheapest stores, you could save a total of <strong>${totalSavingsPotential.toFixed(2)}</strong>!
+              {totalSavingsPotential > 0 && (
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-2xl p-5 relative overflow-hidden">
+                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-200 rounded-full opacity-30 blur-2xl"></div>
+                  <h3 className="text-indigo-900 font-black mb-2 flex items-center gap-2 relative z-10">
+                    <Trophy className="w-5 h-5 text-indigo-600" />
+                    Total Savings Potential
+                  </h3>
+                  <p className="text-indigo-800 text-sm mb-3 relative z-10">
+                    If you buy this item and all items on your current shopping list at their cheapest stores, you could save:
                   </p>
+                  <div className="flex items-baseline gap-2 relative z-10">
+                    <span className="text-3xl font-black text-indigo-700">${totalSavingsPotential.toFixed(2)}</span>
+                    <span className="text-sm font-bold text-indigo-500 uppercase tracking-wider">Total</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* 5. Store Comparison */}
               <div>
@@ -383,7 +474,7 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
                     }
 
                     return (
-                      <div key={d.product_id} className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isCurrent ? 'border-blue-500 bg-blue-50/30 ring-1 ring-blue-500 ring-opacity-50' : isClosestBest ? 'border-emerald-500 bg-emerald-50 shadow-sm ring-1 ring-emerald-500 ring-opacity-50' : 'border-slate-200 bg-white'}`}>
+                      <div key={`${d.product_id}-${idx}`} className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isCurrent ? 'border-blue-500 bg-blue-50/30 ring-1 ring-blue-500 ring-opacity-50' : isClosestBest ? 'border-emerald-500 bg-emerald-50 shadow-sm ring-1 ring-emerald-500 ring-opacity-50' : 'border-slate-200 bg-white'}`}>
                         <div className="flex items-center gap-4">
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg ${isClosestBest ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
                             {idx + 1}
@@ -408,10 +499,10 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
                               )}
                             </div>
                             <div className="text-sm text-slate-500 flex items-center gap-1">
-                              {d.location}
+                              {d.location && d.location !== 'Unknown Location' ? d.location : null}
                               {distanceStr && (
                                 <>
-                                  <span>•</span>
+                                  {d.location && d.location !== 'Unknown Location' ? <span>•</span> : null}
                                   <Navigation className="w-3 h-3" />
                                   {distanceStr}
                                 </>
@@ -460,7 +551,7 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
                           <h4 className="font-bold text-slate-900 text-sm mb-2 line-clamp-2" title={simDeal.name}>{simDeal.name}</h4>
                           <div className="flex items-center gap-1 text-xs text-slate-500 mb-3">
                             <MapPin className="w-3 h-3" />
-                            {simDeal.store} ({simDeal.distance !== Infinity ? `${simDeal.distance.toFixed(1)}km` : simDeal.location})
+                            {simDeal.store} {simDeal.distance !== Infinity ? `(${simDeal.distance.toFixed(1)}km)` : (simDeal.location && simDeal.location !== 'Unknown Location' ? `(${simDeal.location})` : '')}
                           </div>
                         </div>
                         <div className="flex items-end justify-between mt-auto">
@@ -500,22 +591,42 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
               <div>
                 <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
                   <History className="w-5 h-5 text-slate-400" />
-                  Price History Insight
+                  Price History Insight (30 Days)
                 </h3>
                 <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="text-sm text-slate-500">Usually:</div>
-                    <div className="font-bold text-slate-900">${priceHistory.minPrice.toFixed(2)} – ${priceHistory.maxPrice.toFixed(2)}</div>
+                  <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Average</span>
+                      <span className="text-lg font-black text-slate-900">${priceHistory.avg30Days.toFixed(2)}</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                      <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Lowest</span>
+                      <span className="text-lg font-black text-emerald-700">${priceHistory.minPrice.toFixed(2)}</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center p-3 bg-red-50 rounded-xl border border-red-100">
+                      <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1">Highest</span>
+                      <span className="text-lg font-black text-red-700">${priceHistory.maxPrice.toFixed(2)}</span>
+                    </div>
                   </div>
+                  
                   <div className="flex justify-between items-center mb-4">
-                    <div className="text-sm text-slate-500">Today:</div>
-                    <div className="font-black text-lg text-slate-900">${currentPrice.toFixed(2)}</div>
+                    <div className="text-sm text-slate-500">Today's Price:</div>
+                    <div className="font-black text-xl text-slate-900">${currentPrice.toFixed(2)}</div>
                   </div>
-                  <div className={`text-sm font-bold px-3 py-2 rounded-xl inline-block ${
-                    currentPrice < priceHistory.avg30Days ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                  
+                  <div className={`w-full text-center text-sm font-bold px-4 py-3 rounded-xl ${
+                    currentPrice < priceHistory.avg30Days ? 'bg-emerald-100 text-emerald-700' : 
+                    currentPrice > priceHistory.avg30Days ? 'bg-amber-100 text-amber-700' : 
+                    'bg-slate-100 text-slate-700'
                   }`}>
-                    → {currentPrice < priceHistory.avg30Days ? 'Below average price' : 'Above average price'}
+                    {currentPrice < priceHistory.avg30Days ? '↓ Below average price' : 
+                     currentPrice > priceHistory.avg30Days ? '↑ Above average price' : 
+                     '→ Exactly average price'}
                   </div>
+                  
+                  <p className="text-[10px] text-slate-400 mt-4 text-center font-medium uppercase tracking-wider">
+                    Based on {priceHistory.count} recorded price{priceHistory.count !== 1 ? 's' : ''}
+                  </p>
                 </div>
               </div>
 
@@ -535,19 +646,32 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
         </div>
       </div>
 
-      {/* Price Alert Mock Modal */}
+      {/* Price Alert Modal */}
       {showAlertSet && (
         <div className="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-            <h3 className="text-lg font-black text-slate-900 mb-2">Set Price Alert</h3>
+            <h3 className="text-lg font-black text-slate-900 mb-2">
+              {existingAlert ? 'Update Price Alert' : 'Set Price Alert'}
+            </h3>
             <p className="text-slate-500 text-sm mb-4">Notify me when {deal.name} drops below:</p>
             <div className="flex items-center gap-2 mb-6">
               <span className="text-xl font-black text-slate-400">$</span>
-              <input type="number" defaultValue={(currentPrice * 0.9).toFixed(2)} className="w-full text-2xl font-black text-slate-900 border-b-2 border-slate-200 focus:border-emerald-500 focus:outline-none pb-1" />
+              <input 
+                type="number" 
+                value={alertPriceInput}
+                onChange={(e) => setAlertPriceInput(e.target.value)}
+                className="w-full text-2xl font-black text-slate-900 border-b-2 border-slate-200 focus:border-emerald-500 focus:outline-none pb-1" 
+                autoFocus
+              />
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setShowAlertSet(false)} className="flex-1 bg-slate-100 text-slate-700 font-bold py-2.5 rounded-xl">Cancel</button>
-              <button onClick={() => setShowAlertSet(false)} className="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-xl">Set Alert</button>
+              <button onClick={() => setShowAlertSet(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors">Cancel</button>
+              {existingAlert && (
+                <button onClick={handleRemoveAlert} className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2.5 rounded-xl transition-colors">Remove</button>
+              )}
+              <button onClick={handleSetAlert} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-colors">
+                {existingAlert ? 'Update' : 'Set Alert'}
+              </button>
             </div>
           </div>
         </div>

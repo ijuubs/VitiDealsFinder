@@ -4,6 +4,8 @@ import Layout from './components/Layout';
 import Home from './pages/Home';
 import UploadFlyer from './pages/UploadFlyer';
 import ShoppingList from './pages/ShoppingList';
+import Savings from './pages/Savings';
+import Search from './pages/Search';
 import ChatConcierge from './components/ChatConcierge';
 import { useAppStore } from './store';
 
@@ -33,8 +35,10 @@ export default function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/search" element={<Search />} />
           <Route path="/upload" element={<UploadFlyer />} />
           <Route path="/list" element={<ShoppingList />} />
+          <Route path="/savings" element={<Savings />} />
         </Routes>
       </Layout>
       <ChatConcierge />

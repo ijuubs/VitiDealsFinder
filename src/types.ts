@@ -29,6 +29,7 @@ export interface Product {
   in_stock?: boolean;
   verified?: boolean;
   price_trend?: 'stable' | 'dropping' | 'rising';
+  tags?: string[];
 }
 
 export interface PromotionPeriod {
