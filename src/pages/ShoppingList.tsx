@@ -184,7 +184,7 @@ export default function ShoppingList() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-6">
+    <div className="space-y-8 pb-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-slate-900 font-display">Your Shopping List</h1>

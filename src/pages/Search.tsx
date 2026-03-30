@@ -129,12 +129,12 @@ export default function Search() {
       <div className="space-y-4">
         {searchQuery || selectedCategory ? (
           filteredDeals.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {visibleItems.map(deal => (
                 <ProductCard key={deal.product_id} deal={deal} userLocation={userLocation} />
               ))}
               {hasMore && (
-                <div ref={observerTarget} className="w-full h-10 flex items-center justify-center mt-4">
+                <div ref={observerTarget} className="w-full h-10 flex items-center justify-center mt-4 sm:col-span-2 lg:col-span-3 xl:col-span-4">
                   <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
                 </div>
               )}

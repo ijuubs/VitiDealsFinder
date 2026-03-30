@@ -41,7 +41,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             You are currently offline. Viewing cached data.
           </div>
         )}
-        <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 text-[#0097b2]">
             <div className="w-8 h-8 bg-cyan-50 rounded-full flex items-center justify-center">
               <MapPin className="w-4 h-4 fill-current" />
@@ -79,7 +79,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-6">
         {children}
       </main>
 
@@ -87,7 +87,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       {/* Mobile Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-safe pt-2 bg-gradient-to-t from-white via-white to-transparent pointer-events-none">
-        <div className="max-w-md mx-auto bg-white/90 backdrop-blur-xl border border-slate-200/50 shadow-[0_8px_32px_rgba(0,0,0,0.08)] rounded-3xl flex justify-around items-center h-16 mb-4 px-2 pointer-events-auto">
+        <div className="max-w-md md:max-w-2xl mx-auto bg-white/90 backdrop-blur-xl border border-slate-200/50 shadow-[0_8px_32px_rgba(0,0,0,0.08)] rounded-3xl flex justify-around items-center h-16 mb-4 px-2 pointer-events-auto">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (

@@ -11,7 +11,7 @@ export default function CompareBar() {
 
   return (
     <>
-      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[95%] max-w-md bg-slate-900 text-white rounded-2xl shadow-2xl z-40 overflow-hidden border border-slate-700">
+      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[95%] max-w-md md:max-w-2xl bg-slate-900 text-white rounded-2xl shadow-2xl z-40 overflow-hidden border border-slate-700">
         <div className="p-3 flex items-center justify-between bg-slate-800">
           <div className="flex items-center gap-2">
             <div className="bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">

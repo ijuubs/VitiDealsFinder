@@ -439,7 +439,7 @@ export default function UploadFlyer() {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-6xl mx-auto space-y-6 pb-6"
+        className="space-y-6 pb-6"
       >
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -640,7 +640,7 @@ export default function UploadFlyer() {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-3xl mx-auto space-y-8 pb-6"
+      className="space-y-8 pb-6"
     >
       <div>
         <h1 className="text-3xl font-black tracking-tight text-slate-900 font-display">Upload Flyers</h1>

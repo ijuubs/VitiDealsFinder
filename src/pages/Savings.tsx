@@ -46,7 +46,7 @@ export default function Savings() {
   const hasFreshSaver = savingsHistory.length > 0;
 
   return (
-    <div className="max-w-md mx-auto pb-6 space-y-8">
+    <div className="pb-6 space-y-8 max-w-4xl mx-auto">
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-black text-slate-900 font-display tracking-tight">

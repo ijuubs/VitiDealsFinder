@@ -185,7 +185,7 @@ export default function Home() {
     <div className="space-y-8 pb-6">
       {/* Hero Section */}
       <div className="bg-gradient-to-br from-[#0097b2] to-[#007b99] rounded-[2rem] p-8 relative overflow-hidden shadow-lg shadow-cyan-900/20">
-        <div className="relative z-10 w-3/4">
+        <div className="relative z-10 w-full md:w-3/4 lg:w-1/2">
           <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full mb-4">
             <ScanLine className="w-3.5 h-3.5 text-white" />
             <span className="text-white text-xs font-bold tracking-wider uppercase">Smart Shopper</span>
@@ -241,7 +241,7 @@ export default function Home() {
         <div className="flex justify-between items-end mb-4">
           <h2 className="text-2xl font-bold text-slate-900 font-display">Browse Categories</h2>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div 
             onClick={() => setSelectedCategory(selectedCategory === 'Dairy' ? null : 'Dairy')}
             className={`bg-white border rounded-[2rem] p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all group ${selectedCategory === 'Dairy' ? 'border-cyan-500 shadow-lg shadow-cyan-100/50' : 'border-slate-100 hover:border-cyan-200 hover:shadow-lg hover:shadow-cyan-100/50'}`}
@@ -365,7 +365,7 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {visibleItems.map(deal => (
             <ProductCard 
               key={deal.product_id} 
@@ -375,12 +375,12 @@ export default function Home() {
             />
           ))}
           {filteredDeals.length === 0 && (
-            <div className="text-slate-500 py-8 text-center w-full bg-white rounded-2xl border border-slate-100">
+            <div className="text-slate-500 py-8 text-center w-full bg-white rounded-2xl border border-slate-100 sm:col-span-2 lg:col-span-3 xl:col-span-4">
               No deals match your current filters.
             </div>
           )}
           {hasMore && (
-            <div ref={observerTarget} className="w-full h-10 flex items-center justify-center mt-4">
+            <div ref={observerTarget} className="w-full h-10 flex items-center justify-center mt-4 sm:col-span-2 lg:col-span-3 xl:col-span-4">
               <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
