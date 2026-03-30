@@ -1,10 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileImage, Loader2, CheckCircle2, AlertCircle, Trash2, Edit2, Check, X, Image as ImageIcon, WifiOff } from 'lucide-react';
+import { Upload, FileImage, Loader2, CheckCircle2, AlertCircle, Trash2, Edit2, Check, X, Image as ImageIcon, WifiOff, Clock } from 'lucide-react';
 import { extractDealsFromFlyer } from '../services/geminiService';
 import { useAppStore } from '../store';
 import { Deal, Product } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+
+type FileStatus = 'pending' | 'processing' | 'success' | 'error' | 'skipped';
+interface FileProgress {
+  status: FileStatus;
+  message?: string;
+  progress?: number;
+}
 
 export default function UploadFlyer() {
   const [files, setFiles] = useState<File[]>([]);
@@ -12,6 +19,7 @@ export default function UploadFlyer() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState(0);
   const [extractionStatus, setExtractionStatus] = useState('');
+  const [fileProgresses, setFileProgresses] = useState<FileProgress[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -41,25 +49,8 @@ export default function UploadFlyer() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []) as File[];
     
-    // Check for HEIC/HEIF files which browsers can't render in canvas
-    const hasHeic = selectedFiles.some(file => 
-      file.type.includes('heic') || 
-      file.type.includes('heif') || 
-      file.name.toLowerCase().endsWith('.heic') || 
-      file.name.toLowerCase().endsWith('.heif')
-    );
-    
-    if (hasHeic) {
-      setError('HEIC images (from iPhones) are not supported yet. Please convert them to JPG or PNG first.');
-      return;
-    }
-    
-    const imageFiles = selectedFiles.filter(file => file.type.startsWith('image/'));
-    
-    if (imageFiles.length > 0) {
-      addFiles(imageFiles);
-    } else if (selectedFiles.length > 0) {
-      setError('Please select valid image files (JPG, PNG, WebP).');
+    if (selectedFiles.length > 0) {
+      addFiles(selectedFiles);
     }
     
     // Reset the input value so the same file can be selected again
@@ -76,32 +67,42 @@ export default function UploadFlyer() {
     e.preventDefault();
     const droppedFiles = Array.from(e.dataTransfer.files || []) as File[];
     
-    // Check for HEIC/HEIF files
-    const hasHeic = droppedFiles.some(file => 
-      file.type.includes('heic') || 
-      file.type.includes('heif') || 
-      file.name.toLowerCase().endsWith('.heic') || 
-      file.name.toLowerCase().endsWith('.heif')
-    );
-    
-    if (hasHeic) {
-      setError('HEIC images (from iPhones) are not supported yet. Please convert them to JPG or PNG first.');
-      return;
-    }
-    
-    const imageFiles = droppedFiles.filter(file => file.type.startsWith('image/'));
-    
-    if (imageFiles.length > 0) {
-      addFiles(imageFiles);
-    } else {
-      setError('Please drop valid image files (JPG, PNG, WebP).');
+    if (droppedFiles.length > 0) {
+      addFiles(droppedFiles);
     }
   };
 
+  // Keep track of all created object URLs to clean them up on unmount
+  const objectUrlsRef = useRef<Set<string>>(new Set());
+
   const addFiles = (newFiles: File[]) => {
     setFiles(prev => [...prev, ...newFiles]);
-    const newPreviews = newFiles.map(file => URL.createObjectURL(file));
+    const newPreviews = newFiles.map(file => {
+      const isHeic = file.type.includes('heic') || 
+                   file.type.includes('heif') || 
+                   file.name.toLowerCase().endsWith('.heic') || 
+                   file.name.toLowerCase().endsWith('.heif');
+      const isValidImage = file.type.startsWith('image/') && !isHeic;
+      
+      if (!isValidImage) return '';
+      
+      const url = URL.createObjectURL(file);
+      objectUrlsRef.current.add(url);
+      return url;
+    });
     setPreviews(prev => [...prev, ...newPreviews]);
+    setFileProgresses(prev => [...prev, ...newFiles.map(file => {
+      const isHeic = file.type.includes('heic') || 
+                   file.type.includes('heif') || 
+                   file.name.toLowerCase().endsWith('.heic') || 
+                   file.name.toLowerCase().endsWith('.heif');
+      const isValidImage = file.type.startsWith('image/') && !isHeic;
+      
+      if (!isValidImage) {
+        return { status: 'skipped' as FileStatus, message: isHeic ? 'HEIC format not supported' : 'Not a valid image file', progress: 0 };
+      }
+      return { status: 'pending' as FileStatus, message: 'Ready to process', progress: 0 };
+    })]);
     setError(null);
     setSuccess(false);
     setShowPreview(false);
@@ -110,8 +111,23 @@ export default function UploadFlyer() {
 
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
-    setPreviews(prev => prev.filter((_, i) => i !== index));
+    setPreviews(prev => {
+      const urlToRevoke = prev[index];
+      if (urlToRevoke) {
+        URL.revokeObjectURL(urlToRevoke);
+        objectUrlsRef.current.delete(urlToRevoke);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
+    setFileProgresses(prev => prev.filter((_, i) => i !== index));
   };
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   const handleExtract = async () => {
     if (files.length === 0) return;
@@ -121,19 +137,46 @@ export default function UploadFlyer() {
     setExtractionProgress(0);
     setExtractionStatus('Initializing extraction...');
     
+    setFileProgresses(files.map(() => ({ status: 'pending', message: 'Waiting...', progress: 0 })));
+    
     let allNewDeals: Deal[] = [];
+    let errorCount = 0;
+    let skippedCount = 0;
 
-    try {
-      for (let i = 0; i < files.length; i++) {
+    for (let i = 0; i < files.length; i++) {
+      try {
         const file = files[i];
         const baseProgress = (i / files.length) * 100;
         const fileProgressStep = 100 / files.length;
         
+        const isHeic = file.type.includes('heic') || 
+                     file.type.includes('heif') || 
+                     file.name.toLowerCase().endsWith('.heic') || 
+                     file.name.toLowerCase().endsWith('.heif');
+        const isValidImage = file.type.startsWith('image/') && !isHeic;
+        
+        if (!isValidImage) {
+          skippedCount++;
+          setFileProgresses(prev => {
+            const next = [...prev];
+            next[i] = { status: 'skipped', message: isHeic ? 'HEIC format not supported' : 'Not a valid image file', progress: 0 };
+            return next;
+          });
+          setExtractionProgress(((i + 1) / files.length) * 100);
+          continue;
+        }
+        
+        setFileProgresses(prev => {
+          const next = [...prev];
+          next[i] = { status: 'processing', progress: 10, message: 'Preparing image...' };
+          return next;
+        });
         setExtractionStatus(`Preparing flyer ${i + 1} of ${files.length}...`);
         setExtractionProgress(baseProgress + (fileProgressStep * 0.1)); // 10% of this file
         
         const base64String = await new Promise<string>((resolve, reject) => {
           const img = new Image();
+          
           img.onload = () => {
             const canvas = document.createElement('canvas');
             let width = img.width;
@@ -162,16 +205,19 @@ export default function UploadFlyer() {
             const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
             resolve(dataUrl.split(',')[1]);
           };
-          img.onerror = () => reject(new Error('Failed to load image for compression'));
           
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            img.src = reader.result as string;
+          img.onerror = () => {
+            reject(new Error('Failed to load image for compression. It might be corrupted or inaccessible.'));
           };
-          reader.onerror = () => reject(new Error('Failed to read the image file. It might be corrupted or inaccessible.'));
-          reader.readAsDataURL(file);
+          
+          img.src = previews[i];
         });
 
+        setFileProgresses(prev => {
+          const next = [...prev];
+          next[i] = { status: 'processing', progress: 40, message: 'Analyzing deals with AI...' };
+          return next;
+        });
         setExtractionStatus(`Analyzing deals with AI for flyer ${i + 1}...`);
         setExtractionProgress(baseProgress + (fileProgressStep * 0.3)); // 30% of this file
 
@@ -179,6 +225,11 @@ export default function UploadFlyer() {
         const mimeType = 'image/jpeg';
         const flyerData = await extractDealsFromFlyer(base64String, mimeType);
         
+        setFileProgresses(prev => {
+          const next = [...prev];
+          next[i] = { status: 'processing', progress: 80, message: 'Extracting product images...' };
+          return next;
+        });
         setExtractionStatus(`Extracting product images for flyer ${i + 1}...`);
         setExtractionProgress(baseProgress + (fileProgressStep * 0.8)); // 80% of this file
         
@@ -267,50 +318,70 @@ export default function UploadFlyer() {
         });
 
         allNewDeals = [...allNewDeals, ...newDeals];
+        
+        setFileProgresses(prev => {
+          const next = [...prev];
+          next[i] = { status: 'success', progress: 100, message: `Found ${newDeals.length} deals` };
+          return next;
+        });
         setExtractionProgress(((i + 1) / files.length) * 100);
-      }
+      } catch (err: any) {
+        console.error(`Extraction error for file ${i}:`, err);
+        errorCount++;
+        
+        let errorMessage = "An unknown error occurred";
+        if (err instanceof Error) {
+          errorMessage = err.message;
+        } else if (err && typeof err === 'object') {
+          if (err.type === 'error' || err.toString() === '[object ProgressEvent]') {
+            errorMessage = "Network error. Please check your internet connection.";
+          } else {
+            try {
+              errorMessage = JSON.stringify(err);
+            } catch (e) {
+              errorMessage = String(err);
+            }
+          }
+        } else {
+          errorMessage = String(err);
+        }
 
+        if (errorMessage.includes('parse response') || errorMessage.includes('No response') || errorMessage.includes('JSON')) {
+          errorMessage = "AI couldn't understand this flyer.";
+        } else if (errorMessage.includes('timed out')) {
+          errorMessage = "Extraction took too long.";
+        } else if (errorMessage.includes('Network error') || errorMessage.includes('fetch')) {
+          errorMessage = "Network error.";
+        }
+
+        setFileProgresses(prev => {
+          const next = [...prev];
+          next[i] = { status: 'error', message: errorMessage, progress: 0 };
+          return next;
+        });
+      }
+    }
+
+    setIsExtracting(false);
+    setExtractionStatus('');
+
+    if (allNewDeals.length > 0) {
       setExtractedDeals(allNewDeals);
       setSelectedDeals(new Set(allNewDeals.map(d => d.product_id)));
       setShowPreview(true);
-    } catch (err: any) {
-      console.error('Extraction error:', err);
-      // Provide a more detailed error message if available
-      let errorMessage = "An unknown error occurred";
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (err && typeof err === 'object') {
-        if (err.type === 'error' || err.toString() === '[object ProgressEvent]') {
-          errorMessage = "Network error. Please check your internet connection.";
-        } else {
-          try {
-            errorMessage = JSON.stringify(err);
-          } catch (e) {
-            errorMessage = String(err);
-          }
+      if (errorCount > 0 || skippedCount > 0) {
+        let msg = "Some flyers failed to process.";
+        if (errorCount > 0 && skippedCount > 0) {
+          msg = `${errorCount} flyer(s) failed and ${skippedCount} were skipped.`;
+        } else if (errorCount > 0) {
+          msg = `${errorCount} flyer(s) failed to process.`;
+        } else if (skippedCount > 0) {
+          msg = `${skippedCount} flyer(s) were skipped.`;
         }
-      } else {
-        errorMessage = String(err);
+        setError(`${msg} Check the list below for details.`);
       }
-
-      let finalErrorMessage = `Failed to extract deals: ${errorMessage}.`;
-      
-      if (errorMessage.includes('parse response') || errorMessage.includes('No response') || errorMessage.includes('JSON')) {
-        finalErrorMessage = "The AI couldn't understand this flyer. It might be too blurry, too complex, or contain too many items. Try cropping the image to focus on fewer deals or ensure the text is clear and readable.";
-      } else if (errorMessage.includes('timed out')) {
-        finalErrorMessage = "The extraction took too long. The image might be too large or complex. Try cropping the image into smaller sections.";
-      } else if (errorMessage.includes('Network error') || errorMessage.includes('fetch')) {
-        finalErrorMessage = "Network error. Please check your internet connection and try again.";
-      } else if (errorMessage.includes('read the image file')) {
-        finalErrorMessage = errorMessage;
-      } else {
-        finalErrorMessage = `Failed to extract deals: ${errorMessage}. Please try again with a clearer image.`;
-      }
-
-      setError(finalErrorMessage);
-    } finally {
-      setIsExtracting(false);
-      setExtractionStatus('');
+    } else {
+      setError("Failed to extract any deals from the uploaded flyers. Please check the errors and try again.");
     }
   };
 
@@ -352,7 +423,12 @@ export default function UploadFlyer() {
 
   const handleDecline = () => {
     setFiles([]);
+    previews.forEach(url => {
+      URL.revokeObjectURL(url);
+      objectUrlsRef.current.delete(url);
+    });
     setPreviews([]);
+    setFileProgresses([]);
     setExtractedDeals([]);
     setShowPreview(false);
     setSelectedDeals(new Set());
@@ -415,6 +491,36 @@ export default function UploadFlyer() {
             )}
           </div>
         )}
+
+        {/* Processing Summary */}
+        <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6">
+          <h3 className="text-lg font-bold text-slate-900 mb-4 font-display">Processing Summary</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+            {files.map((file, idx) => {
+              const progress = fileProgresses[idx];
+              if (!progress) return null;
+              
+              return (
+                <div key={idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  {progress.status === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />}
+                  {progress.status === 'error' && <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />}
+                  {progress.status === 'skipped' && <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />}
+                  {progress.status === 'pending' && <Clock className="w-5 h-5 text-slate-400 flex-shrink-0" />}
+                  
+                  <div className="truncate">
+                    <p className="text-sm font-bold text-slate-700 truncate">{file.name}</p>
+                    <p className={`text-xs font-medium truncate ${
+                      progress.status === 'error' ? 'text-red-500' : 
+                      progress.status === 'skipped' ? 'text-amber-600' : 'text-slate-500'
+                    }`}>
+                      {progress.message}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Batch Actions */}
         <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-sm">
@@ -587,7 +693,7 @@ export default function UploadFlyer() {
             <AnimatePresence>
               {previews.map((preview, index) => (
                 <motion.div 
-                  key={preview}
+                  key={`${index}-${preview ? 'valid' : 'invalid'}`}
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
@@ -621,29 +727,77 @@ export default function UploadFlyer() {
         )}
       </div>
 
-      {isExtracting && (
+      {(isExtracting || fileProgresses.some(p => p.status !== 'pending')) && (
         <div className="bg-white border border-slate-100 rounded-3xl p-8 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center">
-                <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isExtracting ? 'bg-indigo-50' : 'bg-slate-50'}`}>
+                {isExtracting ? (
+                  <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+                ) : (
+                  <FileImage className="w-6 h-6 text-slate-600" />
+                )}
               </div>
               <div>
-                <h3 className="font-bold text-slate-900 font-display text-lg">Processing Flyers</h3>
-                <p className="text-sm text-slate-500 font-medium">{extractionStatus}</p>
+                <h3 className="font-bold text-slate-900 font-display text-lg">
+                  {isExtracting ? 'Processing Flyers' : 'Processing Complete'}
+                </h3>
+                <p className="text-sm text-slate-500 font-medium">
+                  {isExtracting ? extractionStatus : 'Review the status of your uploaded flyers below.'}
+                </p>
               </div>
             </div>
-            <span className="text-lg font-black text-indigo-600 font-display">{Math.round(extractionProgress)}%</span>
+            {isExtracting && (
+              <span className="text-lg font-black text-indigo-600 font-display">{Math.round(extractionProgress)}%</span>
+            )}
           </div>
           
-          <div className="w-full bg-slate-100 rounded-full h-3 mb-2 overflow-hidden">
-            <motion.div 
-              className="bg-indigo-600 h-3 rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${extractionProgress}%` }}
-              transition={{ duration: 0.3 }}
-            />
-          </div>
+          {isExtracting && (
+            <div className="w-full bg-slate-100 rounded-full h-3 mb-2 overflow-hidden">
+              <motion.div 
+                className="bg-indigo-600 h-3 rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${extractionProgress}%` }}
+                transition={{ duration: 0.3 }}
+              />
+            </div>
+          )}
+
+          {/* Individual File Progress */}
+          {fileProgresses.length > 0 && (
+            <div className="mt-6 space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+              {files.map((file, idx) => {
+                const progress = fileProgresses[idx];
+                if (!progress) return null;
+                
+                return (
+                  <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      {progress.status === 'pending' && <div className="w-5 h-5 rounded-full border-2 border-slate-300 flex-shrink-0" />}
+                      {progress.status === 'processing' && <Loader2 className="w-5 h-5 text-indigo-500 animate-spin flex-shrink-0" />}
+                      {progress.status === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />}
+                      {progress.status === 'error' && <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />}
+                      {progress.status === 'skipped' && <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />}
+                      
+                      <div className="truncate">
+                        <p className="text-sm font-bold text-slate-700 truncate">{file.name}</p>
+                        <p className={`text-xs font-medium truncate ${
+                          progress.status === 'error' ? 'text-red-500' : 
+                          progress.status === 'skipped' ? 'text-amber-600' : 'text-slate-500'
+                        }`}>
+                          {progress.message || (progress.status === 'pending' ? 'Waiting...' : '')}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {progress.status === 'processing' && progress.progress !== undefined && (
+                      <span className="text-xs font-bold text-indigo-600 ml-4">{Math.round(progress.progress)}%</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

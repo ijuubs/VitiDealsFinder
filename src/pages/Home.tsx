@@ -26,8 +26,11 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'basic_needs' | 'best_value' | 'cheapest_kg' | 'highest_savings' | 'nearby'>('all');
 
+  const locationRequested = React.useRef(false);
+
   useEffect(() => {
-    if ('geolocation' in navigator && !userLocation) {
+    if ('geolocation' in navigator && !userLocation && !locationRequested.current) {
+      locationRequested.current = true;
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setUserLocation({
@@ -36,7 +39,7 @@ export default function Home() {
           });
         },
         (error) => {
-          console.error("Error getting location:", error);
+          console.warn("Location access denied or unavailable.");
         }
       );
     }
