@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Award, TrendingUp, History, Bell, MapPin, BarChart2, Edit2, X, CheckCircle2, LogOut, LogIn } from 'lucide-react';
 import { useAppStore } from '../store';
 import AuthModal from '../components/AuthModal';
@@ -8,6 +9,7 @@ export default function Savings() {
   const monthlyGoal = useAppStore(state => state.monthlyGoal);
   const setMonthlyGoal = useAppStore(state => state.setMonthlyGoal);
   const user = useAppStore(state => state.user);
+  const isAdmin = useAppStore(state => state.isAdmin);
   const signOut = useAppStore(state => state.signOut);
 
   const [showGoalModal, setShowGoalModal] = useState(false);
@@ -65,7 +67,7 @@ export default function Savings() {
         ) : (
           <button 
             onClick={() => setShowAuthModal(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-sm font-bold hover:bg-emerald-100 transition-colors"
           >
             <LogIn className="w-4 h-4" />
             Sign In
@@ -201,6 +203,28 @@ export default function Savings() {
             </div>
           </div>
         </div>
+
+        {isAdmin && (
+          <>
+            <h2 className="text-2xl font-bold text-slate-900 mb-4 font-display mt-8">Data & History</h2>
+            <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-slate-100 mb-6">
+              <Link to="/history" className="flex items-center justify-between p-5 hover:bg-slate-50/50 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <History className="w-5 h-5 stroke-[1.5]" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-slate-800 block">Flyer History</span>
+                    <span className="text-xs text-slate-500">View previously uploaded flyers</span>
+                  </div>
+                </div>
+                <div className="text-slate-400">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </div>
+              </Link>
+            </div>
+          </>
+        )}
       </div>
 
       {showGoalModal && (

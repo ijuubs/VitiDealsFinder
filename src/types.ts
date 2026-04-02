@@ -63,3 +63,13 @@ export interface ListItem {
   quantity: number;
   deal: Deal;
 }
+
+export interface UploadedFlyer {
+  id: string;
+  thumbnail: string;
+  uploadDate: string;
+  dealsExtracted: number;
+  store: string;
+  status: 'processing' | 'processed' | 'failed';
+  fileHash?: string;
+}

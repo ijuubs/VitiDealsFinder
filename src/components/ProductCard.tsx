@@ -3,7 +3,7 @@ import { Deal } from '../types';
 import { useAppStore } from '../store';
 import CompareModal from './CompareModal';
 import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm, isBasicNeed, isFoodItem } from '../utils/helpers';
-import { BadgeCheck, ShoppingBasket, Leaf, MapPin, TrendingDown, Calendar, LineChart, Lightbulb, Car, Clock, Store, ShoppingCart, ArrowRightLeft, Star } from 'lucide-react';
+import { BadgeCheck, ShoppingBasket, Leaf, MapPin, TrendingDown, Calendar, LineChart, Lightbulb, Car, Clock, Store, ShoppingCart, ArrowRightLeft, Star, Trash2 } from 'lucide-react';
 
 const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: {lat: number, lon: number} | null }> = ({ deal, isBestValue, userLocation }) => {
   const addToShoppingList = useAppStore(state => state.addToShoppingList);
@@ -12,6 +12,8 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
   const compareList = useAppStore(state => state.compareList);
   const addToCompareList = useAppStore(state => state.addToCompareList);
   const removeFromCompareList = useAppStore(state => state.removeFromCompareList);
+  const removeDeal = useAppStore(state => state.removeDeal);
+  const isAdmin = useAppStore(state => state.isAdmin);
   const [showCompare, setShowCompare] = useState(false);
 
   const isComparing = compareList.some(d => d.product_id === deal.product_id);
@@ -180,17 +182,28 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
           )}
         </div>
         <div className="w-32 h-32 sm:w-40 sm:h-40 flex-shrink-0 relative flex items-center justify-center">
-          <button
-            onClick={handleCompareToggle}
-            className={`absolute top-0 right-0 z-20 p-1.5 rounded-lg border-2 transition-all ${
-              isComparing 
-                ? 'bg-emerald-500 border-emerald-500 text-white' 
-                : 'bg-white/80 backdrop-blur-sm border-gray-200 text-gray-400 hover:border-emerald-500 hover:text-emerald-500'
-            }`}
-            title={isComparing ? "Remove from compare" : "Add to compare"}
-          >
-            <ArrowRightLeft className="w-4 h-4" />
-          </button>
+          <div className="absolute top-0 right-0 z-20 flex flex-col gap-2">
+            {isAdmin && (
+              <button
+                onClick={() => removeDeal(deal.product_id)}
+                className="p-1.5 rounded-lg border-2 bg-white/80 backdrop-blur-sm border-gray-200 text-gray-400 hover:border-red-500 hover:text-red-500 hover:bg-red-50 transition-all"
+                title="Delete deal"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              onClick={handleCompareToggle}
+              className={`p-1.5 rounded-lg border-2 transition-all ${
+                isComparing 
+                  ? 'bg-emerald-500 border-emerald-500 text-white' 
+                  : 'bg-white/80 backdrop-blur-sm border-gray-200 text-gray-400 hover:border-emerald-500 hover:text-emerald-500'
+              }`}
+              title={isComparing ? "Remove from compare" : "Add to compare"}
+            >
+              <ArrowRightLeft className="w-4 h-4" />
+            </button>
+          </div>
           {deal.image_url ? (
             <img alt={deal.name} className={`max-w-full max-h-full object-contain mix-blend-multiply ${isExpired ? 'grayscale' : ''}`} src={deal.image_url} referrerPolicy="no-referrer" />
           ) : (

@@ -11,11 +11,13 @@ interface FileProgress {
   status: FileStatus;
   message?: string;
   progress?: number;
+  fileHash?: string;
 }
 
 export default function UploadFlyer() {
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState(0);
   const [extractionStatus, setExtractionStatus] = useState('');
@@ -45,6 +47,14 @@ export default function UploadFlyer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const addDeals = useAppStore(state => state.addDeals);
+  const isAdmin = useAppStore(state => state.isAdmin);
+  const uploadedFlyers = useAppStore(state => state.uploadedFlyers);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      navigate('/');
+    }
+  }, [isAdmin, navigate]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []) as File[];
@@ -75,7 +85,14 @@ export default function UploadFlyer() {
   // Keep track of all created object URLs to clean them up on unmount
   const objectUrlsRef = useRef<Set<string>>(new Set());
 
-  const addFiles = (newFiles: File[]) => {
+  const calculateFileHash = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const addFiles = async (newFiles: File[]) => {
     setFiles(prev => [...prev, ...newFiles]);
     const newPreviews = newFiles.map(file => {
       const isHeic = file.type.includes('heic') || 
@@ -91,7 +108,12 @@ export default function UploadFlyer() {
       return url;
     });
     setPreviews(prev => [...prev, ...newPreviews]);
-    setFileProgresses(prev => [...prev, ...newFiles.map(file => {
+    
+    // Initialize synchronously to prevent mismatch
+    const initialProgresses = newFiles.map(() => ({ status: 'pending' as FileStatus, message: 'Checking file...', progress: 0 }));
+    setFileProgresses(prev => [...prev, ...initialProgresses]);
+
+    const newProgresses = await Promise.all(newFiles.map(async (file) => {
       const isHeic = file.type.includes('heic') || 
                    file.type.includes('heif') || 
                    file.name.toLowerCase().endsWith('.heic') || 
@@ -101,8 +123,31 @@ export default function UploadFlyer() {
       if (!isValidImage) {
         return { status: 'skipped' as FileStatus, message: isHeic ? 'HEIC format not supported' : 'Not a valid image file', progress: 0 };
       }
-      return { status: 'pending' as FileStatus, message: 'Ready to process', progress: 0 };
-    })]);
+
+      let fileHash = '';
+      try {
+        fileHash = await calculateFileHash(file);
+        const isDuplicate = uploadedFlyers.some(f => f.fileHash === fileHash);
+        
+        if (isDuplicate) {
+          return { status: 'skipped' as FileStatus, message: 'Duplicate flyer detected', progress: 0, fileHash };
+        }
+      } catch (e) {
+        console.warn("Failed to calculate file hash", e);
+      }
+
+      return { status: 'pending' as FileStatus, message: 'Ready to process', progress: 0, fileHash };
+    }));
+
+    setFileProgresses(prev => {
+      const next = [...prev];
+      // Replace the newly added progresses with the resolved ones
+      const startIndex = next.length - newProgresses.length;
+      for (let i = 0; i < newProgresses.length; i++) {
+        next[startIndex + i] = newProgresses[i];
+      }
+      return next;
+    });
     setError(null);
     setSuccess(false);
     setShowPreview(false);
@@ -137,7 +182,9 @@ export default function UploadFlyer() {
     setExtractionProgress(0);
     setExtractionStatus('Initializing extraction...');
     
-    setFileProgresses(files.map(() => ({ status: 'pending', message: 'Waiting...', progress: 0 })));
+    setFileProgresses(prev => prev.map(p => 
+      p.status === 'skipped' ? p : { ...p, status: 'pending', message: 'Waiting...', progress: 0 }
+    ));
     
     let allNewDeals: Deal[] = [];
     let errorCount = 0;
@@ -145,6 +192,12 @@ export default function UploadFlyer() {
 
     for (let i = 0; i < files.length; i++) {
       try {
+        if (fileProgresses[i].status === 'skipped') {
+          skippedCount++;
+          setExtractionProgress(((i + 1) / files.length) * 100);
+          continue;
+        }
+
         const file = files[i];
         const baseProgress = (i / files.length) * 100;
         const fileProgressStep = 100 / files.length;
@@ -159,7 +212,7 @@ export default function UploadFlyer() {
           skippedCount++;
           setFileProgresses(prev => {
             const next = [...prev];
-            next[i] = { status: 'skipped', message: isHeic ? 'HEIC format not supported' : 'Not a valid image file', progress: 0 };
+            next[i] = { ...next[i], status: 'skipped', message: isHeic ? 'HEIC format not supported' : 'Not a valid image file', progress: 0 };
             return next;
           });
           setExtractionProgress(((i + 1) / files.length) * 100);
@@ -168,13 +221,13 @@ export default function UploadFlyer() {
         
         setFileProgresses(prev => {
           const next = [...prev];
-          next[i] = { status: 'processing', progress: 10, message: 'Preparing image...' };
+          next[i] = { ...next[i], status: 'processing', progress: 10, message: 'Preparing image...' };
           return next;
         });
         setExtractionStatus(`Preparing flyer ${i + 1} of ${files.length}...`);
         setExtractionProgress(baseProgress + (fileProgressStep * 0.1)); // 10% of this file
         
-        const base64String = await new Promise<string>((resolve, reject) => {
+        const { base64String, thumbnail } = await new Promise<{base64String: string, thumbnail: string}>((resolve, reject) => {
           const img = new Image();
           
           img.onload = () => {
@@ -203,7 +256,28 @@ export default function UploadFlyer() {
             
             // Compress as JPEG with 0.8 quality
             const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            resolve(dataUrl.split(',')[1]);
+            
+            // Generate thumbnail
+            const thumbCanvas = document.createElement('canvas');
+            let thumbWidth = img.width;
+            let thumbHeight = img.height;
+            const THUMB_MAX = 300;
+            if (thumbWidth > thumbHeight && thumbWidth > THUMB_MAX) {
+              thumbHeight *= THUMB_MAX / thumbWidth;
+              thumbWidth = THUMB_MAX;
+            } else if (thumbHeight > THUMB_MAX) {
+              thumbWidth *= THUMB_MAX / thumbHeight;
+              thumbHeight = THUMB_MAX;
+            }
+            thumbCanvas.width = thumbWidth;
+            thumbCanvas.height = thumbHeight;
+            const thumbCtx = thumbCanvas.getContext('2d');
+            if (thumbCtx) {
+              thumbCtx.drawImage(img, 0, 0, thumbWidth, thumbHeight);
+            }
+            const thumbDataUrl = thumbCanvas.toDataURL('image/jpeg', 0.6);
+
+            resolve({ base64String: dataUrl.split(',')[1], thumbnail: thumbDataUrl });
           };
           
           img.onerror = () => {
@@ -211,6 +285,12 @@ export default function UploadFlyer() {
           };
           
           img.src = previews[i];
+        });
+
+        setThumbnails(prev => {
+          const next = [...prev];
+          next[i] = thumbnail;
+          return next;
         });
 
         setFileProgresses(prev => {
@@ -293,11 +373,25 @@ export default function UploadFlyer() {
             }
           };
 
+          const generateProductId = (store: string, location: string, name: string, price: number | undefined, weight: string | undefined, brand: string | null | undefined) => {
+            const str = `${store}-${location}-${name}-${price || ''}-${weight || ''}-${brand || ''}`.toLowerCase().replace(/\s+/g, '-');
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+              const char = str.charCodeAt(i);
+              hash = ((hash << 5) - hash) + char;
+              hash = hash & hash;
+            }
+            return `prod-${Math.abs(hash).toString(36)}`;
+          };
+
+          const storeName = safeString(flyerData.store, 'Unknown Store').replace(/["{}]/g, '');
+          const locationName = safeString(flyerData.location, 'Unknown Location').replace(/["{}]/g, '');
+
           return {
             ...product,
-            product_id: `flyer-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 9)}`,
-            store: safeString(flyerData.store, 'Unknown Store').replace(/["{}]/g, ''),
-            location: safeString(flyerData.location, 'Unknown Location').replace(/["{}]/g, ''),
+            product_id: generateProductId(storeName, locationName, product.name, product.price, product.weight, product.brand),
+            store: storeName,
+            location: locationName,
             start_date: (() => {
               const d = new Date(flyerData.promotion_period?.start_date || '');
               return isNaN(d.getTime()) ? defaultStartDate.toISOString() : d.toISOString();
@@ -408,6 +502,8 @@ export default function UploadFlyer() {
     setSelectedDeals(new Set());
   };
 
+  const addUploadedFlyer = useAppStore(state => state.addUploadedFlyer);
+
   const handleAccept = () => {
     const dealsToSave = extractedDeals.filter(d => selectedDeals.has(d.product_id));
     if (dealsToSave.length === 0) {
@@ -415,6 +511,25 @@ export default function UploadFlyer() {
       return;
     }
     addDeals(dealsToSave);
+    
+    // Add to history
+    files.forEach((file, index) => {
+      if (fileProgresses[index].status === 'success') {
+        // Find deals that belong to this flyer (approximation based on store/location if we don't have exact mapping)
+        // Since we process them sequentially and add to extractedDeals, we can just save the overall stats or try to map them.
+        // For simplicity, we'll just record the flyer and the total deals saved.
+        addUploadedFlyer({
+          id: `flyer-${Date.now()}-${index}`,
+          thumbnail: thumbnails[index] || previews[index],
+          uploadDate: new Date().toISOString(),
+          dealsExtracted: dealsToSave.length, // Total deals saved in this batch
+          store: dealsToSave[0]?.store || 'Unknown Store',
+          status: 'processed',
+          fileHash: fileProgresses[index].fileHash
+        });
+      }
+    });
+
     setSuccess(true);
     setTimeout(() => {
       navigate('/');

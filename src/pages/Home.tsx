@@ -40,7 +40,8 @@ export default function Home() {
         },
         (error) => {
           console.warn("Location access denied or unavailable.");
-        }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     }
   }, [userLocation, setUserLocation]);

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, StateStorage, createJSONStorage } from 'zustand/middleware';
 import { get, set, del } from 'idb-keyval';
-import { Deal, ListItem } from './types';
+import { Deal, ListItem, UploadedFlyer } from './types';
 import { initialDeals } from './data/initialDeals';
 import { supabase } from './lib/supabase';
 
@@ -19,6 +19,7 @@ const idbStorage: StateStorage = {
 
 interface AppState {
   user: any | null;
+  isAdmin: boolean;
   deals: Deal[];
   shoppingList: ListItem[];
   pendingOfflineDeals: Deal[];
@@ -28,11 +29,17 @@ interface AppState {
   monthlyGoal: number;
   priceAlerts: { productId: string, targetPrice: number }[];
   compareList: Deal[];
+  uploadedFlyers: UploadedFlyer[];
+  hasCompletedOnboarding: boolean;
   setUser: (user: any | null) => void;
   initializeAuth: () => void;
   signOut: () => Promise<void>;
   fetchUserDataFromSupabase: () => Promise<void>;
+  completeOnboarding: () => void;
   addDeals: (newDeals: Deal[]) => void;
+  addUploadedFlyer: (flyer: UploadedFlyer) => void;
+  updateUploadedFlyer: (id: string, updates: Partial<UploadedFlyer>) => void;
+  removeDeal: (productId: string) => Promise<void>;
   addToShoppingList: (deal: Deal) => void;
   removeFromShoppingList: (productId: string) => void;
   clearShoppingList: () => void;
@@ -55,6 +62,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       user: null,
+      isAdmin: false,
       deals: initialDeals,
       shoppingList: [],
       pendingOfflineDeals: [],
@@ -64,24 +72,28 @@ export const useAppStore = create<AppState>()(
       monthlyGoal: 500,
       priceAlerts: [],
       compareList: [],
-      setUser: (user) => set({ user }),
+      uploadedFlyers: [],
+      hasCompletedOnboarding: false,
+      setUser: (user) => set({ user, isAdmin: user?.email === 'kavi.kavinay@gmail.com' }),
       initializeAuth: () => {
         if (!supabase) return;
         
         supabase.auth.getSession().then(({ data: { session } }) => {
-          set({ user: session?.user ?? null });
-          if (session?.user) {
+          const user = session?.user ?? null;
+          set({ user, isAdmin: user?.email === 'kavi.kavinay@gmail.com' });
+          if (user) {
             get().fetchUserDataFromSupabase();
           }
         });
 
         supabase.auth.onAuthStateChange((_event, session) => {
-          set({ user: session?.user ?? null });
-          if (session?.user) {
+          const user = session?.user ?? null;
+          set({ user, isAdmin: user?.email === 'kavi.kavinay@gmail.com' });
+          if (user) {
             get().fetchUserDataFromSupabase();
           } else {
             // Clear user data on sign out
-            set({ shoppingList: [], savingsHistory: [], priceAlerts: [] });
+            set({ shoppingList: [], savingsHistory: [], priceAlerts: [], isAdmin: false });
           }
         });
       },
@@ -89,6 +101,7 @@ export const useAppStore = create<AppState>()(
         if (!supabase) return;
         await supabase.auth.signOut();
       },
+      completeOnboarding: () => set({ hasCompletedOnboarding: true }),
       fetchUserDataFromSupabase: async () => {
         const state = get();
         if (!supabase || !state.user) return;
@@ -217,6 +230,27 @@ export const useAppStore = create<AppState>()(
           }
         } catch (error) {
           console.error('Error fetching from Supabase:', error);
+        }
+      },
+      addUploadedFlyer: (flyer) => set((state) => ({
+        uploadedFlyers: [flyer, ...state.uploadedFlyers]
+      })),
+      updateUploadedFlyer: (id, updates) => set((state) => ({
+        uploadedFlyers: state.uploadedFlyers.map(f => 
+          f.id === id ? { ...f, ...updates } : f
+        )
+      })),
+      removeDeal: async (productId) => {
+        set((state) => ({
+          deals: state.deals.filter(d => d.product_id !== productId)
+        }));
+        
+        if (supabase) {
+          try {
+            await supabase.from('deals').delete().eq('product_id', productId);
+          } catch (error) {
+            console.error('Error deleting deal from Supabase:', error);
+          }
         }
       },
       addToShoppingList: (deal) => set((state) => {

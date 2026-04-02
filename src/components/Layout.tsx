@@ -9,6 +9,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const shoppingList = useAppStore(state => state.shoppingList);
   const selectedRegion = useAppStore(state => state.selectedRegion);
   const setSelectedRegion = useAppStore(state => state.setSelectedRegion);
+  const isAdmin = useAppStore(state => state.isAdmin);
   const itemCount = shoppingList.reduce((acc, item) => acc + item.quantity, 0);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
@@ -28,6 +29,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const navItems = [
     { path: '/', label: 'Home', icon: Home },
     { path: '/search', label: 'Search', icon: Search },
+    ...(isAdmin ? [{ path: '/upload', label: 'Upload', icon: Upload }] : []),
     { path: '/list', label: 'Optimizer', icon: Activity, badge: itemCount },
     { path: '/savings', label: 'Profile', icon: User },
   ];
@@ -70,10 +72,6 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-3">
             <button className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition-colors">
               <Search className="w-5 h-5" />
-            </button>
-            <button className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition-colors relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-slate-50"></span>
             </button>
           </div>
         </div>

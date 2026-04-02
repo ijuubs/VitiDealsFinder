@@ -143,15 +143,13 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
                     Weekly Budget ($)
                   </label>
                   <input 
-                    type="range" 
-                    min="20" 
-                    max="300" 
-                    step="10"
+                    type="number" 
+                    min="1" 
                     value={budget}
                     onChange={(e) => setBudget(Number(e.target.value))}
-                    className="w-full accent-indigo-600"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    placeholder="Enter amount"
                   />
-                  <div className="text-2xl font-black text-indigo-600">${budget}</div>
                 </div>
 
                 <div className="space-y-3">

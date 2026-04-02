@@ -33,8 +33,59 @@ export function getStoreCoordinates(locationName: string) {
   if (loc.includes('mhcc')) return { lat: -18.1416, lon: 178.4419 };
   if (loc.includes('damodar')) return { lat: -18.1500, lon: 178.4500 };
   if (loc.includes('tappoo')) return { lat: -18.1416, lon: 178.4419 };
-  if (loc.includes('rb patel')) return { lat: -18.1416, lon: 178.4419 }; // Default to Suva if just RB Patel
-  if (loc.includes('new world')) return { lat: -18.1416, lon: 178.4419 }; // Default to Suva if just New World
+  
+  // Chain Stores with specific locations
+  if (loc.includes('rb patel')) {
+    if (loc.includes('suva')) return { lat: -18.1416, lon: 178.4419 };
+    if (loc.includes('nadi')) return { lat: -17.8000, lon: 177.4167 };
+    if (loc.includes('lautoka')) return { lat: -17.6167, lon: 177.4667 };
+    if (loc.includes('labasa')) return { lat: -16.4333, lon: 179.3667 };
+    if (loc.includes('nausori')) return { lat: -18.0333, lon: 178.5333 };
+    if (loc.includes('sigatoka')) return { lat: -18.1405, lon: 177.5089 };
+    if (loc.includes('lami')) return { lat: -18.1167, lon: 178.4167 };
+    if (loc.includes('nasinu')) return { lat: -18.0833, lon: 178.5000 };
+    if (loc.includes('nakasi')) return { lat: -18.0667, lon: 178.5167 };
+    return { lat: -18.1416, lon: 178.4419 }; // Default to Suva
+  }
+  
+  if (loc.includes('new world')) {
+    if (loc.includes('suva')) return { lat: -18.1416, lon: 178.4419 };
+    if (loc.includes('nadi')) return { lat: -17.8000, lon: 177.4167 };
+    if (loc.includes('lautoka')) return { lat: -17.6167, lon: 177.4667 };
+    if (loc.includes('labasa')) return { lat: -16.4333, lon: 179.3667 };
+    if (loc.includes('nausori')) return { lat: -18.0333, lon: 178.5333 };
+    if (loc.includes('ba')) return { lat: -17.5333, lon: 177.6833 };
+    if (loc.includes('savusavu')) return { lat: -16.7788, lon: 179.3333 };
+    if (loc.includes('tavua')) return { lat: -17.4333, lon: 177.8667 };
+    if (loc.includes('rakiraki')) return { lat: -17.3667, lon: 178.1500 };
+    return { lat: -18.1416, lon: 178.4419 }; // Default to Suva
+  }
+  
+  if (loc.includes('mh ') || loc === 'mh' || loc.includes('morris hedstrom')) {
+    if (loc.includes('suva')) return { lat: -18.1416, lon: 178.4419 };
+    if (loc.includes('nadi')) return { lat: -17.8000, lon: 177.4167 };
+    if (loc.includes('lautoka')) return { lat: -17.6167, lon: 177.4667 };
+    if (loc.includes('labasa')) return { lat: -16.4333, lon: 179.3667 };
+    if (loc.includes('nausori')) return { lat: -18.0333, lon: 178.5333 };
+    if (loc.includes('ba')) return { lat: -17.5333, lon: 177.6833 };
+    if (loc.includes('sigatoka')) return { lat: -18.1405, lon: 177.5089 };
+    if (loc.includes('navua')) return { lat: -18.2167, lon: 178.1833 };
+    return { lat: -18.1416, lon: 178.4419 }; // Default to Suva
+  }
+  
+  if (loc.includes('maxval-u') || loc.includes('maxvalu')) {
+    if (loc.includes('suva')) return { lat: -18.1416, lon: 178.4419 };
+    if (loc.includes('nadi')) return { lat: -17.8000, lon: 177.4167 };
+    if (loc.includes('lautoka')) return { lat: -17.6167, lon: 177.4667 };
+    if (loc.includes('labasa')) return { lat: -16.4333, lon: 179.3667 };
+    if (loc.includes('nausori')) return { lat: -18.0333, lon: 178.5333 };
+    if (loc.includes('ba')) return { lat: -17.5333, lon: 177.6833 };
+    if (loc.includes('sigatoka')) return { lat: -18.1405, lon: 177.5089 };
+    if (loc.includes('rakiraki')) return { lat: -17.3667, lon: 178.1500 };
+    if (loc.includes('tavua')) return { lat: -17.4333, lon: 177.8667 };
+    if (loc.includes('savusavu')) return { lat: -16.7788, lon: 179.3333 };
+    return { lat: -18.1416, lon: 178.4419 }; // Default to Suva
+  }
   
   return null;
 }
