@@ -4,7 +4,8 @@ import { useAppStore } from '../store';
 import CompareModal from './CompareModal';
 import ProductDetailsModal from './ProductDetailsModal';
 import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm, isBasicNeed, isFoodItem } from '../utils/helpers';
-import { BadgeCheck, ShoppingBasket, Leaf, MapPin, TrendingDown, Calendar, LineChart, Lightbulb, Car, Clock, Store, ListPlus, ArrowRightLeft, Star, Trash2, ThumbsUp, ThumbsDown, AlertTriangle, Share2 } from 'lucide-react';
+import { BadgeCheck, ShoppingBasket, Leaf, MapPin, TrendingDown, Calendar, LineChart, Lightbulb, Car, Clock, Store, ListPlus, ArrowRightLeft, Star, Trash2, ThumbsUp, ThumbsDown, AlertTriangle, Share2, Zap, Trophy, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: {lat: number, lon: number} | null }> = ({ deal, isBestValue, userLocation }) => {
   const addToShoppingList = useAppStore(state => state.addToShoppingList);
@@ -178,67 +179,70 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
     <>
     <main 
       onClick={() => setShowDetails(true)}
-      className={`rounded-2xl relative flex flex-col overflow-hidden transition-all duration-200 h-full cursor-pointer ${
-      isExpired ? 'bg-white border border-red-200 opacity-80 shadow-sm' : 
-      isBestValue ? 'bg-emerald-50/50 border-2 border-emerald-500 shadow-lg shadow-emerald-500/20 scale-[1.01]' : 
-      'bg-white border border-gray-200 shadow-sm hover:shadow-md'
+      className={`rounded-[2.5rem] relative flex flex-col overflow-hidden transition-all duration-300 h-full cursor-pointer group ${
+      isExpired ? 'bg-white border border-red-100 opacity-80 shadow-sm' : 
+      isBestValue ? 'bg-white border-2 border-emerald-500 shadow-[0_20px_50px_rgba(16,185,129,0.15)] scale-[1.01]' : 
+      'bg-white border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(0,0,0,0.08)] hover:-translate-y-1'
     }`}>
       {/* Top Section: Badges & Image */}
-      <div className="p-4 flex items-start justify-between">
-        <div className="flex flex-col gap-1.5 items-start z-10 max-w-[50%]">
+      <div className="p-5 flex items-start justify-between relative">
+        <div className="flex flex-col gap-2 items-start z-10 max-w-[55%]">
           {isBestValue && (
-            <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-sm mb-1">
-              🔥 Best Deal
-            </span>
+            <motion.span 
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              className="inline-flex items-center px-3 py-1.5 rounded-xl text-[11px] font-black bg-gradient-to-r from-orange-500 via-red-500 to-rose-600 text-white shadow-lg shadow-red-500/20 mb-1 uppercase tracking-wider"
+            >
+              <Zap className="w-3 h-3 mr-1 fill-current" />
+              Best Value
+            </motion.span>
           )}
-          {isExpired && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5"></span>
-              Expired
-            </span>
-          )}
-          {!isExpired && deal.in_stock !== false && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
-              In Stock
-            </span>
-          )}
-          {!isExpired && daysLeft > 0 && daysLeft <= 3 && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-200">
-              <Clock className="w-3 h-3 mr-1 text-orange-500" />
-              {daysLeft} {daysLeft === 1 ? 'Day' : 'Days'} Left
-            </span>
-          )}
-          {distance !== null && distance < 2 && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200">
-              <MapPin className="w-3 h-3 mr-1 text-blue-500" />
-              Nearest
-            </span>
-          )}
-          {deal.verified ? (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
-              <BadgeCheck className="w-3 h-3 mr-1 text-blue-500" />
-              Community Verified
-            </span>
-          ) : (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-50 text-slate-500 border border-slate-200">
-              <AlertTriangle className="w-3 h-3 mr-1 text-slate-400" />
-              Unverified
-            </span>
-          )}
-          {isBasicNeed(deal) && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-50 text-rose-700 border border-rose-100">
-              <ShoppingBasket className="w-3 h-3 mr-1 text-rose-500" />
-              Basic Need
-            </span>
-          )}
+          <div className="flex flex-wrap gap-1.5">
+            {isExpired && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black bg-red-50 text-red-600 border border-red-100 uppercase tracking-tight">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 animate-pulse"></span>
+                Expired
+              </span>
+            )}
+            {!isExpired && deal.in_stock !== false && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase tracking-tight">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
+                In Stock
+              </span>
+            )}
+            {!isExpired && daysLeft > 0 && daysLeft <= 3 && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black bg-orange-50 text-orange-600 border border-orange-100 uppercase tracking-tight">
+                <Clock className="w-3 h-3 mr-1 text-orange-500" />
+                {daysLeft}d Left
+              </span>
+            )}
+          </div>
+          
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {deal.verified && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-tight">
+                <BadgeCheck className="w-3 h-3 mr-1 text-blue-500" />
+                Verified
+              </span>
+            )}
+            {isBasicNeed(deal) && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-100 uppercase tracking-tight">
+                <ShoppingBasket className="w-3 h-3 mr-1 text-rose-500" />
+                Essential
+              </span>
+            )}
+          </div>
         </div>
-        <div className="w-32 h-32 sm:w-40 sm:h-40 flex-shrink-0 relative flex items-center justify-center">
+
+        <div className="w-32 h-32 sm:w-44 sm:h-44 flex-shrink-0 relative flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
+          {/* Image Glow Background */}
+          <div className={`absolute inset-0 rounded-full blur-3xl opacity-20 ${isBestValue ? 'bg-emerald-400' : 'bg-slate-200'}`}></div>
+          
           <div className="absolute top-0 right-0 z-20 flex flex-col gap-2">
             {isAdmin && (
               <button
-                onClick={() => removeDeal(deal.product_id)}
-                className="p-1.5 rounded-lg border-2 bg-white/80 backdrop-blur-sm border-gray-200 text-gray-400 hover:border-red-500 hover:text-red-500 hover:bg-red-50 transition-all"
+                onClick={(e) => { e.stopPropagation(); removeDeal(deal.product_id); }}
+                className="p-2 rounded-xl bg-white/90 backdrop-blur-md border border-slate-200 text-slate-400 hover:border-red-500 hover:text-red-500 hover:bg-red-50 transition-all shadow-sm"
                 title="Delete deal"
               >
                 <Trash2 className="w-4 h-4" />
@@ -246,10 +250,10 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
             )}
             <button
               onClick={handleCompareToggle}
-              className={`p-1.5 rounded-lg border-2 transition-all ${
+              className={`p-2 rounded-xl border transition-all shadow-sm ${
                 isComparing 
-                  ? 'bg-emerald-500 border-emerald-500 text-white' 
-                  : 'bg-white/80 backdrop-blur-sm border-gray-200 text-gray-400 hover:border-emerald-500 hover:text-emerald-500'
+                  ? 'bg-slate-900 border-slate-900 text-white' 
+                  : 'bg-white/90 backdrop-blur-md border-slate-200 text-slate-400 hover:border-slate-900 hover:text-slate-900'
               }`}
               title={isComparing ? "Remove from compare" : "Add to compare"}
             >
@@ -257,60 +261,60 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
             </button>
           </div>
           {deal.image_url ? (
-            <img alt={deal.name} className={`max-w-full max-h-full object-contain mix-blend-multiply ${isExpired ? 'grayscale' : ''}`} src={deal.image_url} referrerPolicy="no-referrer" />
+            <img alt={deal.name} className={`max-w-full max-h-full object-contain mix-blend-multiply relative z-10 ${isExpired ? 'grayscale' : ''}`} src={deal.image_url} referrerPolicy="no-referrer" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-300 bg-slate-50 rounded-xl">No Image</div>
+            <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-50 rounded-3xl border border-dashed border-slate-200">No Image</div>
           )}
         </div>
       </div>
 
       {/* Title & Category */}
-      <div className="px-4 pb-2">
-        <h2 className="text-lg font-bold text-gray-900 leading-tight line-clamp-2" title={deal.name}>{deal.name}</h2>
-        <div className="flex items-center gap-1.5 mt-1 text-xs text-gray-500 flex-wrap">
-          {deal.brand && <span>Brand: <span className="text-emerald-600 font-medium">{deal.brand}</span></span>}
-          {deal.brand && deal.category && <span>•</span>}
-          {deal.category && <span>{deal.category}</span>}
+      <div className="px-6 pb-2">
+        <h2 className="text-xl font-black text-slate-900 leading-[1.2] line-clamp-2 font-display group-hover:text-[#0097b2] transition-colors" title={deal.name}>{deal.name}</h2>
+        <div className="flex items-center gap-2 mt-2.5 text-sm text-slate-500 flex-wrap font-medium">
+          {deal.brand && <span className="bg-slate-100 px-2 py-0.5 rounded-lg text-slate-700 font-bold">{deal.brand}</span>}
+          {deal.category && <span className="text-slate-400">{deal.category}</span>}
           {deal.weight && (
-            <>
-              <span>•</span>
-              <span className="font-medium text-slate-700">Size: {deal.weight}</span>
-            </>
+            <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-lg font-bold">
+              {deal.weight}
+            </span>
           )}
         </div>
         
         {/* Reviews and Nutri-Score */}
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-1">
+        <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-100">
             <div className="flex items-center text-amber-400">
-              <Star className="w-3.5 h-3.5 fill-current" />
-              <span className="text-xs font-bold text-slate-700 ml-1">{rating}</span>
+              <Star className="w-4 h-4 fill-current" />
+              <span className="text-sm font-black text-slate-900 ml-1.5">{rating}</span>
             </div>
-            <span className="text-[10px] text-slate-400">({reviewCount})</span>
+            <div className="w-px h-3 bg-slate-200"></div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{reviewCount} reviews</span>
           </div>
           
           {isBasicNeed(deal) && isFoodItem(deal) && (
-            <div className="flex items-center gap-1" title="Nutritional Score">
-              <span className="text-[9px] font-bold text-slate-400 uppercase">Nutri-Score</span>
-              <div className={`w-5 h-5 rounded flex items-center justify-center text-white font-black text-[10px] ${nutriColor}`}>
+            <div className="flex items-center gap-2" title="Nutritional Score">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nutri-Score</span>
+              <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-md ${nutriColor} ring-2 ring-white`}>
                 {nutriScore}
               </div>
             </div>
           )}
         </div>
+      </div>
         
         {/* Tags */}
-        <div className="flex flex-wrap gap-1.5 mt-2">
+        <div className="flex flex-wrap gap-2 mt-3">
           {deal.is_local && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-              <Leaf className="w-3 h-3 mr-1" />
-              Local Fiji Produce
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+              <Leaf className="w-3.5 h-3.5 mr-1.5" />
+              Local Fiji
             </span>
           )}
           {deal.origin === 'Fiji' && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-100">
-              <MapPin className="w-3 h-3 mr-1" />
-              Grown in Fiji
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
+              <MapPin className="w-3.5 h-3.5 mr-1.5" />
+              Fiji Grown
             </span>
           )}
           {deal.tags?.map((tag, idx) => {
@@ -322,166 +326,151 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
             else if (lowerTag.includes('free')) colorClass = "bg-purple-50 text-purple-700 border-purple-200";
             
             return (
-              <span key={idx} className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border ${colorClass}`}>
+              <span key={idx} className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${colorClass}`}>
                 {tag}
               </span>
             );
           })}
         </div>
-      </div>
 
       {/* Price */}
-      <div className="px-4 py-2">
-        <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-extrabold text-gray-900">${currentPrice.toFixed(2)}</span>
-          <span className="text-sm font-medium text-gray-500">/{unit || deal.unit || 'ea'}</span>
+      <div className="px-6 py-4">
+        <div className="flex items-baseline gap-2">
+          <span className="text-4xl font-black text-slate-900 tracking-tighter font-display">${currentPrice.toFixed(2)}</span>
+          <span className="text-lg font-bold text-slate-300">/{unit || deal.unit || 'ea'}</span>
         </div>
         {transportCost > 0 && (
-          <div className="text-xs font-medium text-slate-500 mt-0.5 flex items-center gap-1">
-            <span>True Cost: <strong className="text-slate-700">${realPrice.toFixed(2)}</strong></span>
-            <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
-              +${transportCost.toFixed(2)} {transportMode}
-            </span>
+          <div className="mt-2 flex items-center gap-2">
+            <div className="text-xs font-black text-slate-400 uppercase tracking-widest">True Cost</div>
+            <div className="bg-slate-900 text-white px-2.5 py-1 rounded-xl text-sm font-black shadow-lg shadow-slate-900/10">
+              ${realPrice.toFixed(2)}
+            </div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase">via {transportMode}</span>
           </div>
         )}
         {isBestValue && savingsValue > 0 && (
-          <div className="text-sm font-bold text-emerald-600 mt-1 flex items-center gap-1">
-            <TrendingDown className="w-4 h-4" />
-            Save ${savingsValue.toFixed(2)} vs average
-          </div>
-        )}
-        {deal.end_date && (
-          <div className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded bg-red-50 text-red-700 text-xs font-bold border border-red-100">
-            <Calendar className="w-3.5 h-3.5" />
-            Ends: {new Date(deal.end_date).toLocaleDateString('en-GB')}
-          </div>
+          <motion.div 
+            animate={{ x: [0, 5, 0] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+            className="text-base font-black text-emerald-600 mt-3 flex items-center gap-2"
+          >
+            <TrendingDown className="w-5 h-5" />
+            Save ${savingsValue.toFixed(2)} today
+          </motion.div>
         )}
       </div>
 
       {/* Price Predictor */}
-      <div className="px-4 py-2">
-        <div className={`flex items-center justify-between p-2 rounded-lg border ${
-          isBestValue ? 'bg-white/60 border-emerald-100' : 'bg-slate-50 border-slate-100'
+      <div className="px-6 py-2">
+        <div className={`flex items-center justify-between p-4 rounded-[1.5rem] border transition-colors ${
+          isBestValue ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50/50 border-slate-100'
         }`}>
-          <div className="flex items-center gap-2">
-            <LineChart className={`w-4 h-4 ${isBestValue ? 'text-emerald-500' : 'text-slate-400'}`} />
-            <span className={`text-xs font-medium ${isBestValue ? 'text-emerald-800' : 'text-slate-600'}`}>Price History</span>
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isBestValue ? 'bg-emerald-100 text-emerald-600' : 'bg-white text-slate-400 shadow-sm'}`}>
+              <LineChart className="w-4 h-4" />
+            </div>
+            <span className="text-sm font-black text-slate-700">Price Trend</span>
           </div>
-          <div className="flex items-center gap-2">
-            <svg width="60" height="20" className="overflow-visible">
-              <path d={sparklinePath} fill="none" stroke={deal.price_trend === 'dropping' ? '#10b981' : deal.price_trend === 'rising' ? '#ef4444' : '#3b82f6'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <div className="flex items-center gap-4">
+            <svg width="60" height="24" className="overflow-visible">
+              <path d={sparklinePath} fill="none" stroke={deal.price_trend === 'dropping' ? '#10b981' : deal.price_trend === 'rising' ? '#ef4444' : '#3b82f6'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className={`text-[10px] font-bold uppercase tracking-wider ${
-              deal.price_trend === 'dropping' ? 'text-emerald-600' : 
-              deal.price_trend === 'rising' ? 'text-red-600' : 'text-blue-600'
+            <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+              deal.price_trend === 'dropping' ? 'bg-emerald-100 text-emerald-700' : 
+              deal.price_trend === 'rising' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
             }`}>
-              {deal.price_trend === 'dropping' ? 'Dropping' : 
-               deal.price_trend === 'rising' ? 'Rising' : 'Stable'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Smart Insights */}
-      <div className="px-4 py-3 border-t border-gray-50">
-        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Smart Insights</h3>
-        <div className="flex items-start gap-2">
-          {isBestValue ? (
-            <>
-              <BadgeCheck className="w-4 h-4 text-emerald-500 mt-0.5" />
-              <div>
-                <p className="text-xs font-bold text-gray-900">Top Pick</p>
-                <p className="text-[10px] text-gray-500">Highly competitive price for this item.</p>
-              </div>
-            </>
-          ) : savingsValue > 2 && distance && distance > 5 ? (
-            <>
-              <Car className="w-4 h-4 text-emerald-500 mt-0.5" />
-              <div>
-                <p className="text-xs font-bold text-gray-900">Worth the drive</p>
-                <p className="text-[10px] text-gray-500">Savings cover estimated fuel cost.</p>
-              </div>
-            </>
-          ) : (
-            <>
-              <Lightbulb className="w-4 h-4 text-slate-400 mt-0.5" />
-              <div>
-                <p className="text-xs font-bold text-gray-900">Standard Deal</p>
-                <p className="text-[10px] text-gray-500">Good price for everyday shopping.</p>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Store Logistics */}
-      <div className="px-4 py-3 border-t border-gray-50">
-        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Store Logistics</h3>
-        {deal.store_hours && (
-          <div className="flex items-center gap-2 mb-3">
-            <div className={`${isBestValue ? 'bg-white/60 border-emerald-100' : 'bg-white border-gray-100'} p-1.5 rounded border flex items-center gap-2`}>
-              <Clock className="w-4 h-4 text-emerald-500" />
-              <div>
-                <p className="text-[10px] font-bold text-gray-900 line-clamp-1" title={deal.store_hours}>{deal.store_hours}</p>
-                <p className="text-[9px] text-gray-500">Hours</p>
-              </div>
+              {deal.price_trend}
             </div>
           </div>
-        )}
-        <div className="flex items-start gap-2">
-          <Store className="w-4 h-4 text-gray-400 mt-0.5" />
+        </div>
+      </div>
+
+      {/* Smart Insights & Logistics Combined */}
+      <div className="px-6 py-5 space-y-5">
+        <div className="flex items-start gap-4">
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${isBestValue ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+            {isBestValue ? <Trophy className="w-5 h-5" /> : <Lightbulb className="w-5 h-5" />}
+          </div>
           <div>
-            <p className="text-xs font-bold text-gray-900">{deal.store}</p>
-            {deal.location && deal.location !== 'Unknown Location' && (
-              <p className="text-[10px] text-gray-500 leading-tight">{deal.location}</p>
-            )}
-            {distance !== null && (
-              <p className="text-[10px] text-emerald-600 font-medium mt-0.5">{distance.toFixed(1)}km away</p>
+            <p className="text-sm font-black text-slate-900">{isBestValue ? 'Premium Deal' : 'Market Insight'}</p>
+            <p className="text-xs font-medium text-slate-500 mt-1 leading-relaxed">
+              {isBestValue 
+                ? 'This is currently the best price for this item in your region.' 
+                : savingsValue > 2 ? 'Significant savings detected compared to other stores.' : 'A solid choice for your weekly grocery run.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 bg-slate-100 rounded-2xl flex items-center justify-center flex-shrink-0 text-slate-500">
+            <Store className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-black text-slate-900 truncate">{deal.store}</p>
+              {distance !== null && (
+                <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg uppercase">
+                  {distance.toFixed(1)}km
+                </span>
+              )}
+            </div>
+            <p className="text-xs font-medium text-slate-500 truncate mt-0.5">{deal.location}</p>
+            {deal.store_hours && (
+              <div className="flex items-center gap-1.5 mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <Clock className="w-3 h-3" />
+                <span>{deal.store_hours}</span>
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Total Trip Savings */}
-      <div className="px-4 py-3 flex items-center justify-between border-t border-gray-50">
-        <div className="flex items-center gap-2">
-          <ShoppingBasket className="w-4 h-4 text-emerald-500" />
-          <div>
-            <p className="text-xs font-bold text-gray-900">Total Trip Savings</p>
-            <p className="text-[9px] text-gray-500">If added to your current shopping list.</p>
+      {/* Trip Savings - Premium Highlight */}
+      <div className="mx-4 mb-4 p-4 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-800 shadow-xl shadow-slate-900/20 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Trip Savings</p>
+              <p className="text-[10px] text-slate-500 font-medium">Potential list impact</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-black text-white font-display">
+              +{totalTripSavings > 0 ? '$' + totalTripSavings.toFixed(2) : '$0.00'}
+            </p>
           </div>
         </div>
-        <span className="text-sm font-black text-emerald-600">+{totalTripSavings > 0 ? '$' + totalTripSavings.toFixed(2) : '$0.00'}</span>
       </div>
 
       {/* Community & Share */}
-      <div className="px-4 py-2 border-t border-gray-50 flex items-center justify-between bg-gray-50/50">
-        <div className="flex items-center gap-2">
+      <div className="px-6 py-4 flex items-center justify-between border-t border-slate-50">
+        <div className="flex items-center gap-4">
           <button 
             onClick={(e) => { e.stopPropagation(); upvoteDeal(deal.product_id); }}
-            className="flex items-center gap-1 text-gray-500 hover:text-emerald-600 transition-colors"
+            className="flex items-center gap-2 text-slate-400 hover:text-emerald-600 transition-all group"
           >
-            <ThumbsUp className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-bold">{deal.upvotes || 0}</span>
+            <div className="p-2 rounded-xl group-hover:bg-emerald-50 transition-colors">
+              <ThumbsUp className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            </div>
+            <span className="text-sm font-black text-slate-700">{deal.upvotes || 0}</span>
           </button>
           <button 
             onClick={(e) => { e.stopPropagation(); downvoteDeal(deal.product_id); }}
-            className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors"
+            className="flex items-center gap-2 text-slate-400 hover:text-rose-500 transition-all group"
           >
-            <ThumbsDown className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-bold">{deal.downvotes || 0}</span>
-          </button>
-          <button 
-            onClick={(e) => { e.stopPropagation(); flagOutOfStock(deal.product_id); }}
-            className={`flex items-center gap-1 transition-colors ml-2 ${deal.outOfStock ? 'text-orange-500' : 'text-gray-400 hover:text-orange-500'}`}
-            title="Flag as Out of Stock"
-          >
-            <AlertTriangle className="w-3.5 h-3.5" />
+            <div className="p-2 rounded-xl group-hover:bg-rose-50 transition-colors">
+              <ThumbsDown className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            </div>
+            <span className="text-sm font-black text-slate-700">{deal.downvotes || 0}</span>
           </button>
         </div>
         <button 
           onClick={(e) => { e.stopPropagation(); handleShare(); }}
-          className="text-gray-400 hover:text-[#0097b2] transition-colors"
+          className="p-2.5 rounded-xl bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-all"
           title="Share Deal"
         >
           <Share2 className="w-4 h-4" />
@@ -489,24 +478,27 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
       </div>
 
       {/* Action Buttons */}
-      <div className="px-4 pb-4 pt-2 mt-auto">
-        <button 
+      <div className="px-6 pb-6 pt-2">
+        <motion.button 
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={(e) => { e.stopPropagation(); !isExpired && addToShoppingList(deal); }}
           disabled={isExpired}
-          className={`w-full py-2.5 ${isExpired ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'bg-emerald-500 hover:bg-emerald-600 text-white active:scale-[0.98]'} font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm`}
+          className={`w-full py-4 ${isExpired ? 'bg-slate-200 cursor-not-allowed text-slate-400' : 'bg-[#0097b2] hover:bg-[#007b99] text-white shadow-xl shadow-cyan-900/20'} font-black rounded-[1.5rem] transition-all flex items-center justify-center gap-3 text-lg font-display`}
         >
-          <ListPlus className="w-4 h-4" />
-          {isExpired ? 'Deal Expired' : 'Add to List'}
-        </button>
+          <ListPlus className="w-6 h-6" />
+          {isExpired ? 'Expired' : 'Add to List'}
+        </motion.button>
+        
         <button 
           onClick={(e) => { e.stopPropagation(); setShowCompare(true); }}
           disabled={comparableDeals.length <= 1}
-          className={`w-full py-2 mt-2 border border-gray-200 bg-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1 transition-colors ${
-            comparableDeals.length <= 1 ? 'text-gray-400 cursor-not-allowed opacity-70' : 'text-gray-700 hover:bg-gray-50'
+          className={`w-full py-3 mt-3 border-2 border-slate-100 bg-white text-sm font-black rounded-[1.5rem] flex items-center justify-center gap-2 transition-all ${
+            comparableDeals.length <= 1 ? 'text-slate-200 cursor-not-allowed opacity-50' : 'text-slate-600 hover:bg-slate-50 hover:border-slate-200'
           }`}
         >
-          <ArrowRightLeft className="w-4 h-4" />
-          {comparableDeals.length <= 1 ? 'No other stores found for this item' : `Compare (${comparableDeals.length - 1} other stores)`}
+          <ArrowRightLeft className="w-4.5 h-4.5" />
+          {comparableDeals.length <= 1 ? 'No other stores' : `Compare ${comparableDeals.length - 1} stores`}
         </button>
       </div>
       

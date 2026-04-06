@@ -1,11 +1,16 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppStore } from '../store';
 import ProductCard from '../components/ProductCard';
-import { Search, SlidersHorizontal, Upload, MapPin, TrendingDown, Trophy, ShoppingBasket, ScanLine, ListTodo, Droplets, Wheat, Database, Apple, Bell } from 'lucide-react';
+import { 
+  Search, SlidersHorizontal, Upload, MapPin, TrendingDown, Trophy, 
+  ShoppingBasket, ScanLine, ListTodo, Droplets, Wheat, Database, 
+  Apple, Bell, Sparkles, Zap, Flame, ChevronRight, Store, ArrowRight
+} from 'lucide-react';
 import { Deal } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm, isBasicNeed } from '../utils/helpers';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function Home() {
   const allDeals = useAppStore(state => state.deals);
@@ -166,309 +171,305 @@ export default function Home() {
     return result;
   }, [dealsWithMetrics, searchQuery, selectedCategory, activeFilter, bestValueIds]);
 
-  const topDeals = useMemo(() => {
-    // For top deals, we strictly want basic needs items, sorted by highest savings or lowest price
-    const basicNeedsDeals = dealsWithMetrics
-      .filter(d => d.basicNeed)
-      .sort((a, b) => {
-        if (b.savings !== a.savings) return b.savings - a.savings;
-        return (a.pricePerKg || a.currentPrice) - (b.pricePerKg || b.currentPrice);
-      });
-
-    // Get unique items by name
-    const uniqueDeals = [];
-    const seenNames = new Set();
-    
-    for (const deal of basicNeedsDeals) {
-      const nameKey = (deal.name || '').toLowerCase().trim();
-      if (!seenNames.has(nameKey)) {
-        seenNames.add(nameKey);
-        uniqueDeals.push(deal);
-        if (uniqueDeals.length === 10) break;
-      }
-    }
-    
-    return uniqueDeals;
-  }, [dealsWithMetrics]);
-
   const { visibleItems, hasMore, observerTarget } = useInfiniteScroll(filteredDeals, 20);
 
+  const stats = useMemo(() => ({
+    activeDeals: deals.length,
+    stores: new Set(deals.map(d => d.store)).size,
+    avgSavings: dealsWithMetrics.reduce((acc, d) => acc + (d.savings > 0 ? d.savings : 0), 0) / deals.length
+  }), [deals, dealsWithMetrics]);
+
   return (
-    <div className="space-y-8 pb-6">
+    <div className="space-y-10 pb-12">
       {/* Hero Section */}
-      <div className="bg-gradient-to-br from-[#0097b2] to-[#007b99] rounded-[2rem] p-8 relative overflow-hidden shadow-lg shadow-cyan-900/20">
-        <div className="relative z-10 w-full md:w-3/4 lg:w-1/2">
-          <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full mb-4">
-            <ScanLine className="w-3.5 h-3.5 text-white" />
-            <span className="text-white text-xs font-bold tracking-wider uppercase">Smart Shopper</span>
-          </div>
-          <h1 className="text-3xl font-black text-white leading-[1.1] mb-3 font-display">
-            Digital Flyers<br />at Your Fingertips
-          </h1>
-          <p className="text-cyan-50 text-sm mb-6 leading-relaxed font-medium">
-            {isAdmin 
-              ? "Scan any physical flyer to instantly compare prices across your region."
-              : "Browse digital flyers to instantly compare prices across your region."}
-          </p>
-          {isAdmin && (
-            <button 
-              onClick={() => navigate('/upload')}
-              className="bg-white text-[#0097b2] px-6 py-3.5 rounded-2xl font-bold flex items-center gap-2 shadow-xl shadow-black/10 hover:bg-cyan-50 transition-all active:scale-95"
-            >
-              <ScanLine className="w-5 h-5" />
-              Scan Now
-            </button>
-          )}
-        </div>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative rounded-[2.5rem] overflow-hidden shadow-2xl shadow-cyan-900/20"
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0097b2] via-[#007b99] to-[#005f73]"></div>
         
-        {/* Decorative Elements */}
-        <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 w-32 h-40 opacity-20 transform rotate-12">
-          <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full text-white">
-            <path d="M16 6V4C16 1.79086 14.2091 0 12 0C9.79086 0 8 1.79086 8 4V6H3C2.44772 6 2 6.44772 2 7V20C2 22.2091 3.79086 24 6 24H18C20.2091 24 22 22.2091 22 20V7C22 6.44772 21.5523 6 21 6H16ZM10 4C10 2.89543 10.8954 2 12 2C13.1046 2 14 2.89543 14 4V6H10V4ZM20 20C20 21.1046 19.1046 22 18 22H6C4.89543 22 4 21.1046 4 20V8H20V20Z" />
-          </svg>
+        {/* Abstract Background Shapes */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/4 blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-400/10 rounded-full translate-y-1/2 -translate-x-1/4 blur-3xl"></div>
+        
+        <div className="relative z-10 p-8 md:p-12 flex flex-col md:flex-row items-center gap-10">
+          <div className="flex-1 text-center md:text-left">
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2 }}
+              className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-xl px-4 py-1.5 rounded-full mb-6 border border-white/20"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span className="text-white text-xs font-bold tracking-widest uppercase">Fiji's #1 Deal Finder</span>
+            </motion.div>
+            
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="text-4xl md:text-6xl font-black text-white leading-[1.05] mb-6 font-display"
+            >
+              Save Big on <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-400">Everyday Essentials</span>
+            </motion.h1>
+            
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="text-cyan-50 text-lg mb-8 max-w-lg font-medium opacity-90"
+            >
+              Instantly compare prices from RB Patel, MH, New World, and more. 
+              Smart shopping for every Fijian family.
+            </motion.p>
+
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="flex flex-col sm:flex-row gap-4"
+            >
+              <div className="relative flex-1 group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-[#0097b2] transition-colors" />
+                <input 
+                  type="text"
+                  placeholder="Search for milk, rice, chicken..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white pl-12 pr-4 py-4 rounded-2xl text-slate-900 font-bold shadow-xl shadow-black/10 focus:outline-none focus:ring-4 focus:ring-white/20 transition-all placeholder:text-slate-400"
+                />
+              </div>
+              {isAdmin && (
+                <button 
+                  onClick={() => navigate('/upload')}
+                  className="bg-amber-400 hover:bg-amber-500 text-amber-950 px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 shadow-xl shadow-amber-900/20 transition-all active:scale-95 whitespace-nowrap"
+                >
+                  <Upload className="w-5 h-5" />
+                  Scan Flyer
+                </button>
+              )}
+            </motion.div>
+          </div>
+
+          {/* Hero Visual */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.8, rotate: 5 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            transition={{ delay: 0.6, type: 'spring' }}
+            className="hidden lg:block w-72 h-96 relative"
+          >
+            <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl rounded-[3rem] border border-white/20 rotate-6 translate-x-4 translate-y-4"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent backdrop-blur-md rounded-[3rem] border border-white/30 flex flex-col p-6 shadow-2xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                  <TrendingDown className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-white/60 uppercase tracking-wider">Top Saving</p>
+                  <p className="text-white font-black">Chicken #14</p>
+                </div>
+              </div>
+              <div className="flex-1 flex items-center justify-center">
+                <ShoppingBasket className="w-32 h-32 text-white/20" />
+              </div>
+              <div className="mt-auto pt-4 border-t border-white/10">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <p className="text-[10px] font-bold text-white/60 uppercase tracking-wider">Best Price</p>
+                    <p className="text-2xl font-black text-white">$14.50</p>
+                  </div>
+                  <div className="bg-amber-400 text-amber-950 text-[10px] font-black px-2 py-1 rounded-lg">
+                    -22% OFF
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </div>
+      </motion.div>
+
+      {/* Quick Stats Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Active Deals', value: stats.activeDeals, icon: Zap, color: 'text-amber-500', bg: 'bg-amber-50' },
+          { label: 'Supermarkets', value: stats.stores, icon: Store, color: 'text-blue-500', bg: 'bg-blue-50' },
+          { label: 'Avg. Savings', value: `$${stats.avgSavings.toFixed(2)}`, icon: TrendingDown, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+          { label: 'Verified', value: '100%', icon: Trophy, color: 'text-purple-500', bg: 'bg-purple-50' },
+        ].map((stat, i) => (
+          <motion.div 
+            key={i}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 + i * 0.1 }}
+            className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4"
+          >
+            <div className={`w-10 h-10 ${stat.bg} rounded-2xl flex items-center justify-center flex-shrink-0`}>
+              <stat.icon className={`w-5 h-5 ${stat.color}`} />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{stat.label}</p>
+              <p className="text-lg font-black text-slate-900 leading-none">{stat.value}</p>
+            </div>
+          </motion.div>
+        ))}
       </div>
 
-      {/* Promotional Banners */}
-      <div className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar -mx-4 px-4">
-        {/* Banner 1: Top 10 Basic Needs */}
-        <div 
+      {/* Featured Collections */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <motion.div 
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={() => {
             setActiveFilter('basic_needs');
-            document.getElementById('all-deals-section')?.scrollIntoView({ behavior: 'smooth' });
+            allDealsRef.current?.scrollIntoView({ behavior: 'smooth' });
           }}
-          className="min-w-[280px] sm:min-w-[320px] bg-gradient-to-br from-rose-500 to-pink-600 rounded-[2rem] p-6 relative overflow-hidden shadow-sm cursor-pointer hover:shadow-md transition-all active:scale-[0.98] flex-shrink-0"
+          className="group relative h-48 rounded-[2.5rem] overflow-hidden cursor-pointer shadow-lg"
         >
-          <div className="relative z-10 w-3/4">
-            <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-full mb-3">
-              <TrendingDown className="w-3 h-3 text-white" />
-              <span className="text-white text-[10px] font-bold tracking-wider uppercase">Hot Deals</span>
+          <div className="absolute inset-0 bg-gradient-to-br from-rose-500 to-pink-600"></div>
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+          <div className="relative z-10 p-8 h-full flex flex-col">
+            <div className="bg-white/20 backdrop-blur-md w-fit px-3 py-1 rounded-full mb-auto border border-white/20">
+              <Flame className="w-4 h-4 text-white" />
             </div>
-            <h3 className="text-xl font-black text-white mb-1 font-display leading-tight">Top 10 Basic Needs</h3>
-            <p className="text-rose-100 text-sm font-medium">Save big on everyday essentials</p>
+            <h3 className="text-2xl font-black text-white mb-1">Top 10 Basic Needs</h3>
+            <p className="text-rose-100 font-medium flex items-center gap-2">
+              Save on everyday essentials <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </p>
           </div>
-          <div className="absolute right-4 bottom-4 z-10 w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center">
-            <ShoppingBasket className="w-8 h-8 text-white" />
-          </div>
-          <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-        </div>
+          <ShoppingBasket className="absolute -right-8 -bottom-8 w-48 h-48 text-white/10 -rotate-12" />
+        </motion.div>
 
-        {/* Banner 2: Smart Watchlist */}
-        <div 
+        <motion.div 
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={() => navigate('/savings#smart-watchlist')}
-          className="min-w-[280px] sm:min-w-[320px] bg-gradient-to-br from-amber-400 to-orange-500 rounded-[2rem] p-6 relative overflow-hidden shadow-sm cursor-pointer hover:shadow-md transition-all active:scale-[0.98] flex-shrink-0"
+          className="group relative h-48 rounded-[2.5rem] overflow-hidden cursor-pointer shadow-lg"
         >
-          <div className="relative z-10 w-3/4">
-            <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-full mb-3">
-              <Bell className="w-3 h-3 text-white" />
-              <span className="text-white text-[10px] font-bold tracking-wider uppercase">Alerts</span>
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-400 to-orange-500"></div>
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+          <div className="relative z-10 p-8 h-full flex flex-col">
+            <div className="bg-white/20 backdrop-blur-md w-fit px-3 py-1 rounded-full mb-auto border border-white/20">
+              <Bell className="w-4 h-4 text-white" />
             </div>
-            <h3 className="text-xl font-black text-white mb-1 font-display leading-tight">Smart Watchlist</h3>
-            <p className="text-amber-50 text-sm font-medium">Track your favorite items and prices</p>
+            <h3 className="text-2xl font-black text-white mb-1">Smart Watchlist</h3>
+            <p className="text-amber-50 font-medium flex items-center gap-2">
+              Track your favorite items <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </p>
           </div>
-          <div className="absolute right-4 bottom-4 z-10 w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center">
-            <ListTodo className="w-8 h-8 text-white" />
-          </div>
-          <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-        </div>
+          <ListTodo className="absolute -right-8 -bottom-8 w-48 h-48 text-white/10 -rotate-12" />
+        </motion.div>
       </div>
 
-      {/* Categories */}
-      <div>
-        <div className="flex justify-between items-end mb-4">
-          <h2 className="text-2xl font-bold text-slate-900 font-display">Browse Categories</h2>
+      {/* Categories Section */}
+      <section>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-black text-slate-900 font-display">Browse Categories</h2>
+          <div className="h-px flex-1 bg-slate-100 mx-6 hidden sm:block"></div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div 
-            onClick={() => handleCategoryClick('Dairy')}
-            className={`bg-white border rounded-[2rem] p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all group ${selectedCategory === 'Dairy' ? 'border-cyan-500 shadow-lg shadow-cyan-100/50' : 'border-slate-100 hover:border-cyan-200 hover:shadow-lg hover:shadow-cyan-100/50'}`}
-          >
-            <div className="w-16 h-16 bg-cyan-50 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Droplets className="w-8 h-8 text-[#0097b2] stroke-[1.5]" />
-            </div>
-            <span className="font-bold text-slate-700">Dairy</span>
-          </div>
-          <div 
-            onClick={() => handleCategoryClick('Bakery')}
-            className={`bg-white border rounded-[2rem] p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all group ${selectedCategory === 'Bakery' ? 'border-amber-500 shadow-lg shadow-amber-100/50' : 'border-slate-100 hover:border-amber-200 hover:shadow-lg hover:shadow-amber-100/50'}`}
-          >
-            <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Wheat className="w-8 h-8 text-amber-600 stroke-[1.5]" />
-            </div>
-            <span className="font-bold text-slate-700">Bakery</span>
-          </div>
-          <div 
-            onClick={() => handleCategoryClick('Canned Goods')}
-            className={`bg-white border rounded-[2rem] p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all group ${selectedCategory === 'Canned Goods' ? 'border-emerald-500 shadow-lg shadow-emerald-100/50' : 'border-slate-100 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-100/50'}`}
-          >
-            <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Database className="w-8 h-8 text-emerald-600 stroke-[1.5]" />
-            </div>
-            <span className="font-bold text-slate-700">Canned Goods</span>
-          </div>
-          <div 
-            onClick={() => handleCategoryClick('Produce')}
-            className={`bg-white border rounded-[2rem] p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all group ${selectedCategory === 'Produce' ? 'border-emerald-500 shadow-lg shadow-emerald-100/50' : 'border-slate-100 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-100/50'}`}
-          >
-            <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Apple className="w-8 h-8 text-emerald-600 stroke-[1.5]" />
-            </div>
-            <span className="font-bold text-slate-700">Produce</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Deals Near You (Only show if location is known) */}
-      {userLocation && (
-        <div>
-          <div className="flex justify-between items-end mb-4">
-            <h2 className="text-2xl font-bold text-slate-900 font-display flex items-center gap-2">
-              <MapPin className="w-6 h-6 text-blue-500" />
-              Deals Near You
-            </h2>
-            <button 
-              onClick={() => {
-                setActiveFilter('nearby');
-                document.getElementById('all-deals-section')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="text-sm font-bold text-blue-600 hover:text-blue-700"
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { id: 'Dairy', icon: Droplets, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
+            { id: 'Bakery', icon: Wheat, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
+            { id: 'Canned Goods', icon: Database, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+            { id: 'Produce', icon: Apple, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100' },
+          ].map((cat) => (
+            <motion.button
+              key={cat.id}
+              whileHover={{ y: -5, boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleCategoryClick(cat.id)}
+              className={`relative p-6 rounded-[2rem] border-2 transition-all text-center flex flex-col items-center gap-4 ${
+                selectedCategory === cat.id 
+                  ? 'bg-white border-slate-900 shadow-xl' 
+                  : `bg-white ${cat.border} hover:border-slate-300`
+              }`}
             >
-              See all
-            </button>
+              <div className={`w-16 h-16 ${cat.bg} rounded-2xl flex items-center justify-center`}>
+                <cat.icon className={`w-8 h-8 ${cat.color} stroke-[1.5]`} />
+              </div>
+              <span className="font-black text-slate-800">{cat.id}</span>
+              {selectedCategory === cat.id && (
+                <div className="absolute top-3 right-3 w-2 h-2 bg-slate-900 rounded-full"></div>
+              )}
+            </motion.button>
+          ))}
+        </div>
+      </section>
+
+      {/* Main Deals Area */}
+      <section id="all-deals-section" ref={allDealsRef} className="pt-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+          <h2 className="text-3xl font-black text-slate-900 font-display">
+            {activeFilter === 'all' ? 'All Deals' : activeFilter.replace('_', ' ').toUpperCase()}
+          </h2>
+          
+          <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+            {[
+              { id: 'all', label: 'All', icon: Zap },
+              { id: 'basic_needs', label: 'Essentials', icon: ShoppingBasket },
+              { id: 'best_value', label: 'Best Value', icon: Trophy },
+              { id: 'nearby', label: 'Nearby', icon: MapPin },
+              { id: 'highest_savings', label: 'Big Savings', icon: TrendingDown },
+            ].map((filter) => (
+              <button
+                key={filter.id}
+                onClick={() => setActiveFilter(filter.id as any)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl whitespace-nowrap font-bold text-sm transition-all ${
+                  activeFilter === filter.id
+                    ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <filter.icon className="w-4 h-4" />
+                {filter.label}
+              </button>
+            ))}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {dealsWithMetrics
-              .filter(d => d.distance < 5) // Within 5km
-              .sort((a, b) => a.distance - b.distance)
-              .slice(0, 4)
-              .map(deal => (
+        </div>
+
+        <AnimatePresence mode="popLayout">
+          <motion.div 
+            layout
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+          >
+            {visibleItems.map((deal, idx) => (
+              <motion.div
+                key={deal.product_id}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.05 }}
+              >
                 <ProductCard 
-                  key={deal.product_id} 
                   deal={deal} 
                   isBestValue={bestValueIds.has(deal.product_id)}
                   userLocation={userLocation}
                 />
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Today's Fresh Picks */}
-      <div>
-        <div className="flex justify-between items-end mb-4">
-          <h2 className="text-2xl font-bold text-slate-900 font-display flex items-center gap-2">
-            <Apple className="w-6 h-6 text-emerald-500" />
-            Today's Fresh Picks
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {dealsWithMetrics
-            .filter(d => d.category === 'Produce' || d.category === 'Meat' || d.category === 'Dairy')
-            .sort((a, b) => b.savings - a.savings)
-            .slice(0, 4)
-            .map(deal => (
-              <ProductCard 
-                key={deal.product_id} 
-                deal={deal} 
-                isBestValue={bestValueIds.has(deal.product_id)}
-                userLocation={userLocation}
-              />
+              </motion.div>
             ))}
-        </div>
-      </div>
+          </motion.div>
+        </AnimatePresence>
 
-      {/* All Deals Section */}
-      <div id="all-deals-section">
-        <div className="flex justify-between items-end mb-4">
-          <h2 className="text-2xl font-bold text-slate-900 font-display">All Deals</h2>
-        </div>
-        
-        {/* Filters */}
-        <div className="flex gap-2 overflow-x-auto pb-4 hide-scrollbar -mx-4 px-4">
-          <button
-            onClick={() => setActiveFilter('all')}
-            className={`px-4 py-2 rounded-full whitespace-nowrap font-bold text-sm transition-all ${
-              activeFilter === 'all'
-                ? 'bg-slate-800 text-white'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setActiveFilter('basic_needs')}
-            className={`px-4 py-2 rounded-full whitespace-nowrap font-bold text-sm transition-all ${
-              activeFilter === 'basic_needs'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-emerald-50 hover:text-emerald-700'
-            }`}
-          >
-            Basic Needs
-          </button>
-          <button
-            onClick={() => setActiveFilter('best_value')}
-            className={`px-4 py-2 rounded-full whitespace-nowrap font-bold text-sm transition-all ${
-              activeFilter === 'best_value'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-blue-50 hover:text-blue-700'
-            }`}
-          >
-            Best Value
-          </button>
-          <button
-            onClick={() => setActiveFilter('cheapest_kg')}
-            className={`px-4 py-2 rounded-full whitespace-nowrap font-bold text-sm transition-all ${
-              activeFilter === 'cheapest_kg'
-                ? 'bg-purple-600 text-white'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-purple-50 hover:text-purple-700'
-            }`}
-          >
-            Cheapest per kg
-          </button>
-          <button
-            onClick={() => setActiveFilter('highest_savings')}
-            className={`px-4 py-2 rounded-full whitespace-nowrap font-bold text-sm transition-all ${
-              activeFilter === 'highest_savings'
-                ? 'bg-amber-500 text-white'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-amber-50 hover:text-amber-700'
-            }`}
-          >
-            Highest Savings
-          </button>
-          <button
-            onClick={() => setActiveFilter('nearby')}
-            className={`px-4 py-2 rounded-full whitespace-nowrap font-bold text-sm transition-all ${
-              activeFilter === 'nearby'
-                ? 'bg-rose-500 text-white'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-rose-50 hover:text-rose-700'
-            }`}
-          >
-            Nearby
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {visibleItems.map(deal => (
-            <ProductCard 
-              key={deal.product_id} 
-              deal={deal} 
-              isBestValue={bestValueIds.has(deal.product_id)}
-              userLocation={userLocation}
-            />
-          ))}
-          {filteredDeals.length === 0 && (
-            <div className="text-slate-500 py-8 text-center w-full bg-white rounded-2xl border border-slate-100 sm:col-span-2 lg:col-span-3 xl:col-span-4">
-              No deals match your current filters.
+        {filteredDeals.length === 0 && (
+          <div className="text-slate-500 py-20 text-center w-full bg-white rounded-[2.5rem] border border-slate-100 shadow-inner">
+            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Search className="w-10 h-10 text-slate-300" />
             </div>
-          )}
-          {hasMore && (
-            <div ref={observerTarget} className="w-full h-10 flex items-center justify-center mt-4 sm:col-span-2 lg:col-span-3 xl:col-span-4">
+            <p className="text-xl font-bold text-slate-900">No deals found</p>
+            <p className="text-slate-500">Try adjusting your search or filters</p>
+          </div>
+        )}
+
+        {hasMore && (
+          <div ref={observerTarget} className="w-full py-12 flex items-center justify-center">
+            <div className="flex items-center gap-2 text-slate-400 font-bold">
               <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+              <span>Loading more deals...</span>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
