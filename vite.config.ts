@@ -1,45 +1,49 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig, loadEnv} from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig(({mode}) => {
-  const env = loadEnv(mode, '.', '');
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+
   return {
+    base: "/",   // critical for Netlify deployment
+
     plugins: [
-      react(), 
+      react(),
       tailwindcss(),
       VitePWA({
-        registerType: 'autoUpdate',
-        includeAssets: ['icon.svg'],
+        registerType: "autoUpdate",
+        includeAssets: ["icon.svg"],
         manifest: {
-          name: 'Fiji Smart Deals',
-          short_name: 'Smart Deals',
-          description: 'Find the best supermarket deals in Fiji',
-          theme_color: '#059669',
+          name: "Fiji Smart Deals",
+          short_name: "Smart Deals",
+          description: "Find the best supermarket deals in Fiji",
+          theme_color: "#059669",
           icons: [
             {
-              src: 'icon.svg',
-              sizes: '192x192 512x512',
-              type: 'image/svg+xml'
+              src: "icon.svg",
+              sizes: "192x192 512x512",
+              type: "image/svg+xml"
             }
           ]
         }
       })
     ],
+
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      __GEMINI_API_KEY__: JSON.stringify(env.GEMINI_API_KEY)
     },
+
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
-      },
+        "@": path.resolve(__dirname, ".")
+      }
     },
+
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-    },
+      hmr: process.env.DISABLE_HMR !== "true"
+    }
   };
 });
