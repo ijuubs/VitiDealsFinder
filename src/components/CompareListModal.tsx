@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect } from 'react';
-import { X, Trophy, MapPin, CheckCircle2, ShoppingCart, Calendar } from 'lucide-react';
+import { X, Trophy, MapPin, CheckCircle2, ListPlus, Calendar } from 'lucide-react';
 import { Deal } from '../types';
 import { useAppStore } from '../store';
 import { getStoreCoordinates, getDistanceFromLatLonInKm, getEffectivePrice, getNormalizedPrice } from '../utils/helpers';
@@ -162,7 +162,7 @@ export default function CompareListModal({ onClose }: { onClose: () => void }) {
                             : 'bg-slate-900 hover:bg-slate-800 text-white'
                       }`}
                     >
-                      <ShoppingCart className="w-3.5 h-3.5" />
+                      <ListPlus className="w-3.5 h-3.5" />
                       {isExpired ? 'Expired' : 'Add to List'}
                     </button>
                   </div>

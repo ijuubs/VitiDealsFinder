@@ -1,31 +1,25 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppStore } from '../store';
-import { ShoppingCart, Search, Camera, ArrowRight, Check, Palmtree } from 'lucide-react';
+import { MapPin, Bus, Users, ArrowRight, Check } from 'lucide-react';
 
 const steps = [
   {
-    title: "Bula! Welcome to Fiji Deals",
-    description: "Your ultimate companion for smart shopping across Fiji's supermarkets. Find the best prices and save money every week.",
-    icon: <Palmtree className="w-16 h-16 text-emerald-500" />,
+    title: "Find Local Deals",
+    description: "Discover the best supermarket specials near you in Fiji. We automatically detect your city to prioritize the closest deals.",
+    icon: <MapPin className="w-16 h-16 text-emerald-500" />,
     color: "bg-emerald-50 text-emerald-900"
   },
   {
-    title: "Compare & Save",
-    description: "Search for products across MH, RB Patel, Extra, and more. Compare prices instantly and build your smart shopping list.",
-    icon: <Search className="w-16 h-16 text-blue-500" />,
+    title: "True Cost Shopping",
+    description: "We calculate the cheapest trip, factoring in bus fare and driving costs, so you know exactly how much you're saving.",
+    icon: <Bus className="w-16 h-16 text-blue-500" />,
     color: "bg-blue-50 text-blue-900"
   },
   {
-    title: "AI-Powered Flyers",
-    description: "We automatically extract deals from weekly supermarket flyers using advanced AI, so you never miss a special.",
-    icon: <Camera className="w-16 h-16 text-purple-500" />,
-    color: "bg-purple-50 text-purple-900"
-  },
-  {
-    title: "Ready to Shop?",
-    description: "Create an account to save your shopping lists, track your savings, and get personalized deal alerts.",
-    icon: <ShoppingCart className="w-16 h-16 text-orange-500" />,
+    title: "Community Verified",
+    description: "Real-time stock updates and deal verification by shoppers like you. Upvote, downvote, and flag out-of-stock items.",
+    icon: <Users className="w-16 h-16 text-orange-500" />,
     color: "bg-orange-50 text-orange-900"
   }
 ];
@@ -106,7 +100,7 @@ export default function Onboarding() {
           >
             {currentStep === steps.length - 1 ? (
               <>
-                Get Started <Check className="w-5 h-5" />
+                Start Saving <Check className="w-5 h-5" />
               </>
             ) : (
               <>

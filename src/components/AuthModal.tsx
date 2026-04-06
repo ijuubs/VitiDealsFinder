@@ -38,7 +38,11 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       }
       onClose();
     } catch (err: any) {
-      setError(err.message || "An error occurred during authentication.");
+      if (err.message?.includes('Database error saving new user')) {
+        setError("Database setup incomplete. Please run the SQL script in supabase-setup.sql in your Supabase SQL Editor to create the required tables and triggers.");
+      } else {
+        setError(err.message || "An error occurred during authentication.");
+      }
     } finally {
       setLoading(false);
     }

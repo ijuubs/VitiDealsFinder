@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { X, Trophy, TrendingDown, AlertCircle, ShoppingBag, Tag, MapPin, Info, CheckCircle2, ShoppingCart, Navigation, SlidersHorizontal, Maximize2, Layers, History, Bell, ListPlus, PackageSearch, Star, Leaf } from 'lucide-react';
+import { X, Trophy, TrendingDown, AlertCircle, ShoppingBag, Tag, MapPin, Info, CheckCircle2, Navigation, SlidersHorizontal, Maximize2, Layers, History, Bell, ListPlus, PackageSearch, Star, Leaf } from 'lucide-react';
 import { Deal } from '../types';
 import { useAppStore } from '../store';
 import { getStoreCoordinates, getDistanceFromLatLonInKm, getEffectivePrice, getNormalizedPrice, isBasicNeed, isFoodItem } from '../utils/helpers';
@@ -586,18 +586,18 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
 
               {/* Total Savings Potential */}
               {totalSavingsPotential > 0 && (
-                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-2xl p-5 relative overflow-hidden">
-                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-200 rounded-full opacity-30 blur-2xl"></div>
-                  <h3 className="text-indigo-900 font-black mb-2 flex items-center gap-2 relative z-10">
-                    <Trophy className="w-5 h-5 text-indigo-600" />
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-5 relative overflow-hidden">
+                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-200 rounded-full opacity-30 blur-2xl"></div>
+                  <h3 className="text-emerald-900 font-black mb-2 flex items-center gap-2 relative z-10">
+                    <Trophy className="w-5 h-5 text-emerald-600" />
                     Total Savings Potential
                   </h3>
-                  <p className="text-indigo-800 text-sm mb-3 relative z-10">
+                  <p className="text-emerald-800 text-sm mb-3 relative z-10">
                     If you buy this item and all items on your current shopping list at their cheapest stores, you could save:
                   </p>
                   <div className="flex items-baseline gap-2 relative z-10">
-                    <span className="text-3xl font-black text-indigo-700">${totalSavingsPotential.toFixed(2)}</span>
-                    <span className="text-sm font-bold text-indigo-500 uppercase tracking-wider">Total</span>
+                    <span className="text-3xl font-black text-emerald-700">${totalSavingsPotential.toFixed(2)}</span>
+                    <span className="text-sm font-bold text-emerald-500 uppercase tracking-wider">Total</span>
                   </div>
                 </div>
               )}
@@ -787,7 +787,7 @@ export default function CompareModal({ deal, onClose }: { deal: Deal, onClose: (
               onClick={handleAddToList}
               className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
             >
-              <ShoppingBag className="w-5 h-5" />
+              <ListPlus className="w-5 h-5" />
               Add to Shopping List
             </button>
           </div>

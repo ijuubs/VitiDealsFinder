@@ -1,15 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store';
-import { Trash2, Plus, Minus, ShoppingBag, Tag, MapPin, TrendingDown, Share2, Copy, CheckCircle2, Sparkles } from 'lucide-react';
+import { Trash2, Plus, Minus, ShoppingBag, Tag, MapPin, TrendingDown, Share2, Copy, CheckCircle2, Sparkles, Car, Bus, Footprints } from 'lucide-react';
 import { getEffectivePrice, isBasicNeed, getStoreCoordinates, getDistanceFromLatLonInKm } from '../utils/helpers';
 import { useNavigate } from 'react-router-dom';
 import SmartListGenerator from '../components/SmartListGenerator';
 
 export default function ShoppingList() {
-  const { shoppingList, removeFromShoppingList, clearShoppingList, updateQuantity, optimizeShoppingList, deals: allDeals, userLocation, selectedRegion, addSavings } = useAppStore();
+  const { shoppingList, removeFromShoppingList, clearShoppingList, updateQuantity, optimizeShoppingList, deals: allDeals, userLocation, selectedRegion, addSavings, weeklyBudget, setWeeklyBudget, transportMode, setTransportMode } = useAppStore();
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const [showSmartGenerator, setShowSmartGenerator] = useState(false);
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
+  const [budgetInput, setBudgetInput] = useState(weeklyBudget.toString());
   const navigate = useNavigate();
 
   // Filter deals based on selected region
@@ -78,10 +80,15 @@ export default function ShoppingList() {
     let isOptimized = true;
     const optimizedItems: typeof shoppingList = [];
     const storeGroups = new Map<string, number>();
+    const currentStoreGroups = new Set<string>();
+
+    // Transport cost penalty per additional store
+    const transportCostPerStore = transportMode === 'driving' ? 2.00 : transportMode === 'bus' ? 1.50 : 0;
 
     activeItems.forEach(item => {
       const currentPrice = getEffectivePrice(item.deal);
       currentTotal += currentPrice * item.quantity;
+      currentStoreGroups.add(item.deal.store);
 
       const normalizedName = item.deal?.name?.toLowerCase().trim() || '';
       const comparableDeals = allDeals.filter(d => 
@@ -98,6 +105,8 @@ export default function ShoppingList() {
         );
         const cheapestPrice = getEffectivePrice(cheapest);
         
+        // Only switch if the savings justify potentially adding a new store
+        // (Simplified logic: we just check if it's cheaper, but we'll add the transport cost at the end)
         if (cheapestPrice < currentPrice) {
           bestDeal = cheapest;
           bestPrice = cheapestPrice;
@@ -111,6 +120,19 @@ export default function ShoppingList() {
       storeGroups.set(bestDeal.store, (storeGroups.get(bestDeal.store) || 0) + item.quantity);
     });
 
+    // Add transport costs
+    const currentTransportCost = (currentStoreGroups.size - 1) * transportCostPerStore;
+    const optimizedTransportCost = (storeGroups.size - 1) * transportCostPerStore;
+    
+    currentTotal += currentTransportCost;
+    optimizedTotal += optimizedTransportCost;
+
+    // If optimized total (including transport) is worse, revert to current
+    if (optimizedTotal >= currentTotal) {
+      isOptimized = true;
+      optimizedTotal = currentTotal;
+    }
+
     const savings = currentTotal - optimizedTotal;
 
     return {
@@ -119,9 +141,10 @@ export default function ShoppingList() {
       optimizedTotal,
       savings,
       optimizedItems,
-      storeGroups: Array.from(storeGroups.entries()).sort((a, b) => b[1] - a[1])
+      storeGroups: Array.from(storeGroups.entries()).sort((a, b) => b[1] - a[1]),
+      transportCost: optimizedTransportCost
     };
-  }, [shoppingList, allDeals]);
+  }, [shoppingList, allDeals, transportMode]);
 
   const generateExportText = () => {
     let text = `🛒 My Smart Shopping List\n`;
@@ -194,17 +217,65 @@ export default function ShoppingList() {
         </div>
         <button
           onClick={() => setShowSmartGenerator(true)}
-          className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-colors"
+          className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-colors"
         >
           <Sparkles className="w-5 h-5" />
           Smart Generator
         </button>
       </div>
 
+      {/* Budget Forecasting */}
+      <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-slate-900 font-display">Weekly Budget</h2>
+          {isEditingBudget ? (
+            <div className="flex items-center gap-2">
+              <input 
+                type="number" 
+                value={budgetInput} 
+                onChange={(e) => setBudgetInput(e.target.value)}
+                className="w-24 px-2 py-1 border border-slate-200 rounded-lg text-sm"
+              />
+              <button 
+                onClick={() => {
+                  const val = parseFloat(budgetInput);
+                  if (!isNaN(val) && val > 0) setWeeklyBudget(val);
+                  setIsEditingBudget(false);
+                }}
+                className="text-emerald-600 text-sm font-bold"
+              >
+                Save
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setIsEditingBudget(true)} className="text-[#0097b2] text-sm font-bold">Edit Budget</button>
+          )}
+        </div>
+        
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm font-medium">
+            <span className="text-slate-500">Projected Total: <span className="text-slate-900 font-bold">${totalPrice.toFixed(2)}</span></span>
+            <span className="text-slate-500">Budget: <span className="text-slate-900 font-bold">${weeklyBudget.toFixed(2)}</span></span>
+          </div>
+          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+            <div 
+              className={`h-full rounded-full transition-all duration-500 ${totalPrice > weeklyBudget ? 'bg-red-500' : totalPrice > weeklyBudget * 0.8 ? 'bg-orange-400' : 'bg-emerald-500'}`}
+              style={{ width: `${Math.min(100, (totalPrice / weeklyBudget) * 100)}%` }}
+            ></div>
+          </div>
+          {totalPrice > weeklyBudget && (
+            <p className="text-xs text-red-500 font-medium mt-1">You are ${ (totalPrice - weeklyBudget).toFixed(2) } over your weekly budget!</p>
+          )}
+          {totalPrice <= weeklyBudget && totalPrice > weeklyBudget * 0.8 && (
+            <p className="text-xs text-orange-500 font-medium mt-1">You are approaching your weekly budget limit.</p>
+          )}
+        </div>
+      </div>
+
       {shoppingList.length === 0 ? (
         <div className="text-center py-20 px-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
-          <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <ShoppingBag className="w-10 h-10 text-indigo-500" />
+          <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <ShoppingBag className="w-10 h-10 text-emerald-500" />
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-2 font-display">Your list is empty</h2>
           <p className="text-slate-500 mb-8 max-w-sm mx-auto font-medium">
@@ -212,14 +283,14 @@ export default function ShoppingList() {
           </p>
           <button
             onClick={() => navigate('/')}
-            className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-sm hover:shadow-md"
+            className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm hover:shadow-md"
           >
             Browse Deals
           </button>
           <div className="mt-4">
             <button
               onClick={() => setShowSmartGenerator(true)}
-              className="inline-flex items-center justify-center px-6 py-3 border border-indigo-200 text-base font-medium rounded-xl text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors shadow-sm hover:shadow-md gap-2"
+              className="inline-flex items-center justify-center px-6 py-3 border border-emerald-200 text-base font-medium rounded-xl text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors shadow-sm hover:shadow-md gap-2"
             >
               <Sparkles className="w-5 h-5" />
               Use Smart Generator
@@ -346,15 +417,39 @@ export default function ShoppingList() {
             {tripOptimizer && (
               <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-3xl p-6 relative overflow-hidden shadow-sm">
                 <div className="absolute -right-4 -top-4 w-32 h-32 bg-emerald-200 rounded-full opacity-20 blur-3xl"></div>
-                <h3 className="text-emerald-900 font-bold mb-3 flex items-center gap-2 relative z-10 font-display">
-                  <MapPin className="w-5 h-5 text-emerald-600" />
-                  Smart Trip Optimizer
-                </h3>
+                <div className="flex justify-between items-center mb-3 relative z-10">
+                  <h3 className="text-emerald-900 font-bold flex items-center gap-2 font-display">
+                    <MapPin className="w-5 h-5 text-emerald-600" />
+                    Smart Trip Optimizer
+                  </h3>
+                </div>
+
+                {/* Transport Mode Selector */}
+                <div className="flex bg-white/60 p-1 rounded-xl mb-4 relative z-10 border border-emerald-100/50">
+                  <button
+                    onClick={() => setTransportMode('driving')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${transportMode === 'driving' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-800 hover:bg-white/50'}`}
+                  >
+                    <Car className="w-3.5 h-3.5" /> Drive
+                  </button>
+                  <button
+                    onClick={() => setTransportMode('bus')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${transportMode === 'bus' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-800 hover:bg-white/50'}`}
+                  >
+                    <Bus className="w-3.5 h-3.5" /> Bus
+                  </button>
+                  <button
+                    onClick={() => setTransportMode('walking')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${transportMode === 'walking' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-800 hover:bg-white/50'}`}
+                  >
+                    <Footprints className="w-3.5 h-3.5" /> Walk
+                  </button>
+                </div>
                 
                 {!tripOptimizer.isOptimized ? (
                   <>
                     <p className="text-emerald-800 text-sm mb-4 relative z-10 leading-relaxed font-medium">
-                      We found better deals for some of your items! You can save an additional <strong className="font-black text-emerald-900">${tripOptimizer.savings.toFixed(2)}</strong> by optimizing your list.
+                      We found better deals! You can save an additional <strong className="font-black text-emerald-900">${tripOptimizer.savings.toFixed(2)}</strong> by optimizing your list (factors in transport costs).
                     </p>
                     <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 relative z-10 space-y-3 mb-5 border border-emerald-100/50">
                       <div className="flex justify-between items-center text-sm font-medium">
@@ -375,32 +470,51 @@ export default function ShoppingList() {
                   </>
                 ) : (
                   <p className="text-emerald-800 text-sm relative z-10 leading-relaxed font-medium bg-white/60 p-4 rounded-2xl border border-emerald-100/50">
-                    ✨ Your list is fully optimized! You have the best possible prices for all active items.
+                    ✨ Your list is fully optimized! You have the best possible prices for all active items, factoring in transport costs.
                   </p>
                 )}
               </div>
             )}
 
-            {/* Store Recommendations */}
+            {/* Interactive Trip Itinerary */}
             {tripOptimizer && tripOptimizer.storeGroups.length > 0 && (
-              <div className="bg-blue-50 border border-blue-100 rounded-3xl p-6 shadow-sm">
-                <h3 className="text-blue-900 font-bold mb-3 flex items-center gap-2 font-display">
-                  <MapPin className="w-5 h-5 text-blue-600" />
-                  Stores to Visit
+              <div className="bg-orange-50 border border-orange-100 rounded-3xl p-6 shadow-sm">
+                <h3 className="text-orange-900 font-bold mb-3 flex items-center gap-2 font-display">
+                  <MapPin className="w-5 h-5 text-orange-600" />
+                  Interactive Itinerary
                 </h3>
-                <p className="text-blue-800 text-sm mb-4 font-medium">Based on your {tripOptimizer.isOptimized ? 'optimized' : 'current'} list:</p>
-                <div className="space-y-2">
-                  {tripOptimizer.storeGroups.map(([store, count], index) => (
-                    <div key={store} className="flex justify-between items-center bg-white/80 backdrop-blur-sm rounded-2xl p-3 border border-blue-100/50 shadow-sm">
-                      <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
-                          {index + 1}
+                <p className="text-orange-800 text-sm mb-4 font-medium">Your step-by-step shopping guide:</p>
+                <div className="space-y-4">
+                  {tripOptimizer.storeGroups.map(([store, count], index) => {
+                    const storeItems = shoppingList.filter(item => item.deal.store === store);
+                    return (
+                      <div key={store} className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-orange-100/50 shadow-sm">
+                        <div className="flex items-center gap-3 mb-3 border-b border-orange-50 pb-2">
+                          <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-xs font-bold">
+                            {index + 1}
+                          </div>
+                          <span className="font-bold text-slate-900">{store}</span>
+                          <span className="ml-auto text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">{count} items</span>
                         </div>
-                        <span className="font-bold text-slate-900">{store}</span>
+                        <div className="space-y-2">
+                          {storeItems.map(item => (
+                            <label key={item.product_id} className="flex items-start gap-3 p-2 hover:bg-orange-50/50 rounded-xl cursor-pointer transition-colors">
+                              <div className="relative flex items-start pt-0.5">
+                                <input type="checkbox" className="peer sr-only" />
+                                <div className="w-5 h-5 border-2 border-orange-300 rounded peer-checked:bg-orange-500 peer-checked:border-orange-500 transition-colors flex items-center justify-center">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100" />
+                                </div>
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-bold text-slate-800 leading-tight">{item.deal.name}</p>
+                                <p className="text-xs text-slate-500">{item.quantity}x @ ${getEffectivePrice(item.deal).toFixed(2)}</p>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
                       </div>
-                      <span className="text-sm font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">{count} item{count > 1 ? 's' : ''}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -443,7 +557,7 @@ export default function ShoppingList() {
                 </button>
                 <button 
                   onClick={handleShare}
-                  className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
                 >
                   <Share2 className="w-5 h-5" />
                   Share List

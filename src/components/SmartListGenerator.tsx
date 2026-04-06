@@ -116,7 +116,7 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
       <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         <div className="flex justify-between items-center p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="bg-indigo-100 p-2.5 rounded-xl text-indigo-600">
+            <div className="bg-emerald-100 p-2.5 rounded-xl text-emerald-600">
               <Sparkles className="w-6 h-6" />
             </div>
             <div>
@@ -147,7 +147,7 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
                     min="1" 
                     value={budget}
                     onChange={(e) => setBudget(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
                     placeholder="Enter amount"
                   />
                 </div>
@@ -164,7 +164,7 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
                         onClick={() => setFamilySize(size)}
                         className={`flex-1 py-2 rounded-xl font-bold transition-all ${
                           familySize === size 
-                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+                            ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200' 
                             : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                         }`}
                       >
@@ -185,7 +185,7 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
                     onClick={() => setDiet('any')}
                     className={`px-4 py-2 rounded-xl font-bold transition-all ${
                       diet === 'any' 
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200' 
                         : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                     }`}
                   >
@@ -207,7 +207,7 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
               <button
                 onClick={handleGenerate}
                 disabled={isGenerating}
-                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-lg transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70"
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-lg transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 disabled:opacity-70"
               >
                 {isGenerating ? (
                   <>
@@ -224,14 +224,14 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="bg-indigo-50 rounded-2xl p-5 border border-indigo-100 flex justify-between items-center">
+              <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 flex justify-between items-center">
                 <div>
-                  <h3 className="font-black text-indigo-900 text-lg">Your Smart List</h3>
-                  <p className="text-indigo-700 text-sm font-medium">{generatedList.length} essential items for {familySize} people</p>
+                  <h3 className="font-black text-emerald-900 text-lg">Your Smart List</h3>
+                  <p className="text-emerald-700 text-sm font-medium">{generatedList.length} essential items for {familySize} people</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm text-indigo-600 font-bold uppercase tracking-wider mb-1">Total Est. Cost</div>
-                  <div className="text-3xl font-black text-indigo-700">${totalCost.toFixed(2)}</div>
+                  <div className="text-sm text-emerald-600 font-bold uppercase tracking-wider mb-1">Total Est. Cost</div>
+                  <div className="text-3xl font-black text-emerald-700">${totalCost.toFixed(2)}</div>
                 </div>
               </div>
 
@@ -280,7 +280,7 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
             <button
               onClick={handleAddToList}
               disabled={generatedList.length === 0}
-              className="flex-[2] py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-50"
+              className="flex-[2] py-3.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-200 flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Plus className="w-5 h-5" />
               Add All to My List

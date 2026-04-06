@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Home from './pages/Home';
@@ -7,7 +7,7 @@ import ShoppingList from './pages/ShoppingList';
 import Savings from './pages/Savings';
 import Search from './pages/Search';
 import FlyerHistory from './pages/FlyerHistory';
-import SplashScreen from './components/SplashScreen';
+import Community from './pages/Community';
 import Onboarding from './components/Onboarding';
 import { useAppStore } from './store';
 
@@ -16,8 +16,6 @@ export default function App() {
   const fetchDealsFromSupabase = useAppStore(state => state.fetchDealsFromSupabase);
   const initializeAuth = useAppStore(state => state.initializeAuth);
   const hasCompletedOnboarding = useAppStore(state => state.hasCompletedOnboarding);
-  
-  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     initializeAuth();
@@ -42,14 +40,13 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
-      
-      {!showSplash && !hasCompletedOnboarding && <Onboarding />}
+      {!hasCompletedOnboarding && <Onboarding />}
 
       <Layout>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/search" element={<Search />} />
+          <Route path="/community" element={<Community />} />
           <Route path="/upload" element={<UploadFlyer />} />
           <Route path="/list" element={<ShoppingList />} />
           <Route path="/savings" element={<Savings />} />

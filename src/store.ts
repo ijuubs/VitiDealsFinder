@@ -27,6 +27,8 @@ interface AppState {
   selectedRegion: string;
   savingsHistory: { amount: number, date: string }[];
   monthlyGoal: number;
+  weeklyBudget: number;
+  transportMode: 'driving' | 'walking' | 'bus';
   priceAlerts: { productId: string, targetPrice: number }[];
   compareList: Deal[];
   uploadedFlyers: UploadedFlyer[];
@@ -40,6 +42,9 @@ interface AppState {
   addUploadedFlyer: (flyer: UploadedFlyer) => void;
   updateUploadedFlyer: (id: string, updates: Partial<UploadedFlyer>) => void;
   removeDeal: (productId: string) => Promise<void>;
+  upvoteDeal: (productId: string) => void;
+  downvoteDeal: (productId: string) => void;
+  flagOutOfStock: (productId: string) => void;
   addToShoppingList: (deal: Deal) => void;
   removeFromShoppingList: (productId: string) => void;
   clearShoppingList: () => void;
@@ -50,6 +55,8 @@ interface AppState {
   setSelectedRegion: (region: string) => void;
   addSavings: (amount: number) => void;
   setMonthlyGoal: (goal: number) => void;
+  setWeeklyBudget: (budget: number) => void;
+  setTransportMode: (mode: 'driving' | 'walking' | 'bus') => void;
   addPriceAlert: (productId: string, targetPrice: number) => void;
   removePriceAlert: (productId: string) => void;
   addToCompareList: (deal: Deal) => void;
@@ -70,6 +77,8 @@ export const useAppStore = create<AppState>()(
       selectedRegion: 'current',
       savingsHistory: [],
       monthlyGoal: 500,
+      weeklyBudget: 150,
+      transportMode: 'driving',
       priceAlerts: [],
       compareList: [],
       uploadedFlyers: [],
@@ -253,6 +262,21 @@ export const useAppStore = create<AppState>()(
           }
         }
       },
+      upvoteDeal: (productId) => set((state) => ({
+        deals: state.deals.map(deal => 
+          deal.product_id === productId ? { ...deal, upvotes: (deal.upvotes || 0) + 1 } : deal
+        )
+      })),
+      downvoteDeal: (productId) => set((state) => ({
+        deals: state.deals.map(deal => 
+          deal.product_id === productId ? { ...deal, downvotes: (deal.downvotes || 0) + 1 } : deal
+        )
+      })),
+      flagOutOfStock: (productId) => set((state) => ({
+        deals: state.deals.map(deal => 
+          deal.product_id === productId ? { ...deal, outOfStock: true } : deal
+        )
+      })),
       addToShoppingList: (deal) => set((state) => {
         const existing = state.shoppingList.find(item => item.product_id === deal.product_id);
         let newList;
@@ -404,6 +428,8 @@ export const useAppStore = create<AppState>()(
         }
         return { monthlyGoal: goal };
       }),
+      setWeeklyBudget: (budget) => set({ weeklyBudget: budget }),
+      setTransportMode: (mode) => set({ transportMode: mode }),
       addPriceAlert: (productId, targetPrice) => set((state) => {
         const newAlerts = [...state.priceAlerts.filter(a => a.productId !== productId), { productId, targetPrice }];
         

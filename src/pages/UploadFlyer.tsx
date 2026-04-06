@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, FileImage, Loader2, CheckCircle2, AlertCircle, Trash2, Edit2, Check, X, Image as ImageIcon, WifiOff, Clock } from 'lucide-react';
 import { extractDealsFromFlyer } from '../services/geminiService';
@@ -25,6 +25,14 @@ export default function UploadFlyer() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isDragging, setIsDragging] = useState(false);
+  const isCancelledRef = useRef(false);
+
+  const handleCancel = () => {
+    isCancelledRef.current = true;
+    setIsExtracting(false);
+    setExtractionStatus('Extraction cancelled.');
+  };
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -43,6 +51,20 @@ export default function UploadFlyer() {
   const [extractedDeals, setExtractedDeals] = useState<Deal[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [selectedDeals, setSelectedDeals] = useState<Set<string>>(new Set());
+  const [editingDealId, setEditingDealId] = useState<string | null>(null);
+  const [reviewFilter, setReviewFilter] = useState<'all' | 'missing_price' | 'missing_name'>('all');
+
+  const filteredExtractedDeals = useMemo(() => {
+    return extractedDeals.filter(deal => {
+      if (reviewFilter === 'missing_price') return !deal.price && (!deal.variants || deal.variants.length === 0);
+      if (reviewFilter === 'missing_name') return !deal.name || deal.name.length < 3;
+      return true;
+    });
+  }, [extractedDeals, reviewFilter]);
+
+  const handleDealEdit = (id: string, field: keyof Deal, value: any) => {
+    setExtractedDeals(prev => prev.map(d => d.product_id === id ? { ...d, [field]: value } : d));
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -71,10 +93,17 @@ export default function UploadFlyer() {
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    setIsDragging(false);
     const droppedFiles = Array.from(e.dataTransfer.files || []) as File[];
     
     if (droppedFiles.length > 0) {
@@ -178,6 +207,7 @@ export default function UploadFlyer() {
     if (files.length === 0) return;
 
     setIsExtracting(true);
+    isCancelledRef.current = false;
     setError(null);
     setExtractionProgress(0);
     setExtractionStatus('Initializing extraction...');
@@ -189,271 +219,316 @@ export default function UploadFlyer() {
     let allNewDeals: Deal[] = [];
     let errorCount = 0;
     let skippedCount = 0;
+    let completedCount = 0;
 
-    for (let i = 0; i < files.length; i++) {
-      try {
-        if (fileProgresses[i].status === 'skipped') {
-          skippedCount++;
-          setExtractionProgress(((i + 1) / files.length) * 100);
-          continue;
-        }
+    const CHUNK_SIZE = 2;
+    for (let i = 0; i < files.length; i += CHUNK_SIZE) {
+      if (isCancelledRef.current) break;
+      
+      const chunkIndices = [];
+      for (let j = i; j < i + CHUNK_SIZE && j < files.length; j++) {
+        chunkIndices.push(j);
+      }
 
-        const file = files[i];
-        const baseProgress = (i / files.length) * 100;
-        const fileProgressStep = 100 / files.length;
-        
-        const isHeic = file.type.includes('heic') || 
-                     file.type.includes('heif') || 
-                     file.name.toLowerCase().endsWith('.heic') || 
-                     file.name.toLowerCase().endsWith('.heif');
-        const isValidImage = file.type.startsWith('image/') && !isHeic;
-        
-        if (!isValidImage) {
-          skippedCount++;
+      const chunkResults = await Promise.all(chunkIndices.map(async (idx) => {
+        try {
+          if (isCancelledRef.current) return [];
+          
+          if (fileProgresses[idx].status === 'skipped') {
+            skippedCount++;
+            completedCount++;
+            setExtractionProgress((completedCount / files.length) * 100);
+            return;
+          }
+
+          const file = files[idx];
+          
+          const isHeic = file.type.includes('heic') || 
+                       file.type.includes('heif') || 
+                       file.name.toLowerCase().endsWith('.heic') || 
+                       file.name.toLowerCase().endsWith('.heif');
+          const isValidImage = file.type.startsWith('image/') && !isHeic;
+          
+          if (!isValidImage) {
+            skippedCount++;
+            setFileProgresses(prev => {
+              const next = [...prev];
+              next[idx] = { ...next[idx], status: 'skipped', message: isHeic ? 'HEIC format not supported' : 'Not a valid image file', progress: 0 };
+              return next;
+            });
+            completedCount++;
+            setExtractionProgress((completedCount / files.length) * 100);
+            return;
+          }
+          
           setFileProgresses(prev => {
             const next = [...prev];
-            next[i] = { ...next[i], status: 'skipped', message: isHeic ? 'HEIC format not supported' : 'Not a valid image file', progress: 0 };
+            next[idx] = { ...next[idx], status: 'processing', progress: 10, message: 'Preparing image...' };
             return next;
           });
-          setExtractionProgress(((i + 1) / files.length) * 100);
-          continue;
-        }
-        
-        setFileProgresses(prev => {
-          const next = [...prev];
-          next[i] = { ...next[i], status: 'processing', progress: 10, message: 'Preparing image...' };
-          return next;
-        });
-        setExtractionStatus(`Preparing flyer ${i + 1} of ${files.length}...`);
-        setExtractionProgress(baseProgress + (fileProgressStep * 0.1)); // 10% of this file
-        
-        const { base64String, thumbnail } = await new Promise<{base64String: string, thumbnail: string}>((resolve, reject) => {
-          const img = new Image();
+          setExtractionStatus(`Processing flyers... (${completedCount + 1}/${files.length})`);
           
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            let width = img.width;
-            let height = img.height;
-            
-            // Max dimension for Gemini is typically 3072, let's use 1536 to be safe and fast
-            const MAX_DIMENSION = 1536;
-            if (width > height && width > MAX_DIMENSION) {
-              height *= MAX_DIMENSION / width;
-              width = MAX_DIMENSION;
-            } else if (height > MAX_DIMENSION) {
-              width *= MAX_DIMENSION / height;
-              height = MAX_DIMENSION;
-            }
-            
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-              reject(new Error('Failed to get canvas context'));
-              return;
-            }
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            // Compress as JPEG with 0.8 quality
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            
-            // Generate thumbnail
-            const thumbCanvas = document.createElement('canvas');
-            let thumbWidth = img.width;
-            let thumbHeight = img.height;
-            const THUMB_MAX = 300;
-            if (thumbWidth > thumbHeight && thumbWidth > THUMB_MAX) {
-              thumbHeight *= THUMB_MAX / thumbWidth;
-              thumbWidth = THUMB_MAX;
-            } else if (thumbHeight > THUMB_MAX) {
-              thumbWidth *= THUMB_MAX / thumbHeight;
-              thumbHeight = THUMB_MAX;
-            }
-            thumbCanvas.width = thumbWidth;
-            thumbCanvas.height = thumbHeight;
-            const thumbCtx = thumbCanvas.getContext('2d');
-            if (thumbCtx) {
-              thumbCtx.drawImage(img, 0, 0, thumbWidth, thumbHeight);
-            }
-            const thumbDataUrl = thumbCanvas.toDataURL('image/jpeg', 0.6);
-
-            resolve({ base64String: dataUrl.split(',')[1], thumbnail: thumbDataUrl });
-          };
-          
-          img.onerror = () => {
-            reject(new Error('Failed to load image for compression. It might be corrupted or inaccessible.'));
-          };
-          
-          img.src = previews[i];
-        });
-
-        setThumbnails(prev => {
-          const next = [...prev];
-          next[i] = thumbnail;
-          return next;
-        });
-
-        setFileProgresses(prev => {
-          const next = [...prev];
-          next[i] = { status: 'processing', progress: 40, message: 'Analyzing deals with AI...' };
-          return next;
-        });
-        setExtractionStatus(`Analyzing deals with AI for flyer ${i + 1}...`);
-        setExtractionProgress(baseProgress + (fileProgressStep * 0.3)); // 30% of this file
-
-        // We converted it to jpeg during compression
-        const mimeType = 'image/jpeg';
-        const flyerData = await extractDealsFromFlyer(base64String, mimeType);
-        
-        setFileProgresses(prev => {
-          const next = [...prev];
-          next[i] = { status: 'processing', progress: 80, message: 'Extracting product images...' };
-          return next;
-        });
-        setExtractionStatus(`Extracting product images for flyer ${i + 1}...`);
-        setExtractionProgress(baseProgress + (fileProgressStep * 0.8)); // 80% of this file
-        
-        // Process images based on bounding boxes
-        const processImages = async (products: Product[]): Promise<Product[]> => {
-          if (!products || !Array.isArray(products)) {
-            return [];
-          }
-          return new Promise((resolve) => {
+          const { base64String, thumbnail } = await new Promise<{base64String: string, thumbnail: string}>((resolve, reject) => {
             const img = new Image();
+            
             img.onload = () => {
               const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+              
+              // Max dimension for Gemini is typically 3072, let's use 1536 to be safe and fast
+              const MAX_DIMENSION = 1536;
+              if (width > height && width > MAX_DIMENSION) {
+                height *= MAX_DIMENSION / width;
+                width = MAX_DIMENSION;
+              } else if (height > MAX_DIMENSION) {
+                width *= MAX_DIMENSION / height;
+                height = MAX_DIMENSION;
+              }
+              
+              canvas.width = width;
+              canvas.height = height;
               const ctx = canvas.getContext('2d');
               if (!ctx) {
-                resolve(products);
+                reject(new Error('Failed to get canvas context'));
                 return;
               }
-
-              const updatedProducts = products.map(product => {
-                if (product.bounding_box && product.bounding_box.length === 4) {
-                  const [ymin, xmin, ymax, xmax] = product.bounding_box;
-                  
-                  const y = (Math.min(ymin, ymax) / 1000) * img.height;
-                  const x = (Math.min(xmin, xmax) / 1000) * img.width;
-                  const height = (Math.abs(ymax - ymin) / 1000) * img.height;
-                  const width = (Math.abs(xmax - xmin) / 1000) * img.width;
-
-                  if (width > 0 && height > 0) {
-                    canvas.width = width;
-                    canvas.height = height;
-                    ctx.drawImage(img, x, y, width, height, 0, 0, width, height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                    return { ...product, image_url: dataUrl };
-                  }
-                }
-                return product;
-              });
-              resolve(updatedProducts);
-            };
-            img.onerror = () => resolve(products);
-            img.src = `data:image/jpeg;base64,${base64String}`;
-          });
-        };
-
-        const productsWithImages = await processImages(flyerData.products);
-
-        // Map products to deals
-        const newDeals: Deal[] = productsWithImages.map(product => {
-          const defaultStartDate = new Date();
-          const defaultEndDate = new Date();
-          defaultEndDate.setDate(defaultEndDate.getDate() + 7);
-
-          const safeString = (val: any, fallback: string) => {
-            if (!val) return fallback;
-            if (typeof val === 'string') return val;
-            if (Array.isArray(val)) return val.join(', ');
-            try {
-              return JSON.stringify(val);
-            } catch (e) {
-              return fallback;
-            }
-          };
-
-          const generateProductId = (store: string, location: string, name: string, price: number | undefined, weight: string | undefined, brand: string | null | undefined) => {
-            const str = `${store}-${location}-${name}-${price || ''}-${weight || ''}-${brand || ''}`.toLowerCase().replace(/\s+/g, '-');
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-              const char = str.charCodeAt(i);
-              hash = ((hash << 5) - hash) + char;
-              hash = hash & hash;
-            }
-            return `prod-${Math.abs(hash).toString(36)}`;
-          };
-
-          const storeName = safeString(flyerData.store, 'Unknown Store').replace(/["{}]/g, '');
-          const locationName = safeString(flyerData.location, 'Unknown Location').replace(/["{}]/g, '');
-
-          return {
-            ...product,
-            product_id: generateProductId(storeName, locationName, product.name, product.price, product.weight, product.brand),
-            store: storeName,
-            location: locationName,
-            start_date: (() => {
-              const d = new Date(flyerData.promotion_period?.start_date || '');
-              return isNaN(d.getTime()) ? defaultStartDate.toISOString() : d.toISOString();
-            })(),
-            end_date: (() => {
-              const d = new Date(flyerData.promotion_period?.end_date || '');
-              // If invalid date or date is in the past, use default (7 days from now)
-              if (isNaN(d.getTime()) || d.getTime() < Date.now()) {
-                return defaultEndDate.toISOString();
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              // Compress as JPEG with 0.8 quality
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+              
+              // Generate thumbnail
+              const thumbCanvas = document.createElement('canvas');
+              let thumbWidth = img.width;
+              let thumbHeight = img.height;
+              const THUMB_MAX = 300;
+              if (thumbWidth > thumbHeight && thumbWidth > THUMB_MAX) {
+                thumbHeight *= THUMB_MAX / thumbWidth;
+                thumbWidth = THUMB_MAX;
+              } else if (thumbHeight > THUMB_MAX) {
+                thumbWidth *= THUMB_MAX / thumbHeight;
+                thumbHeight = THUMB_MAX;
               }
-              return d.toISOString();
-            })(),
-            terms_and_conditions: flyerData.terms_and_conditions,
-            store_hours: flyerData.store_hours,
-            traffic_status: flyerData.traffic_status,
-            uploaded_at: Date.now(),
-          };
-        });
+              thumbCanvas.width = thumbWidth;
+              thumbCanvas.height = thumbHeight;
+              const thumbCtx = thumbCanvas.getContext('2d');
+              if (thumbCtx) {
+                thumbCtx.drawImage(img, 0, 0, thumbWidth, thumbHeight);
+              }
+              const thumbDataUrl = thumbCanvas.toDataURL('image/jpeg', 0.6);
 
-        allNewDeals = [...allNewDeals, ...newDeals];
-        
-        setFileProgresses(prev => {
-          const next = [...prev];
-          next[i] = { status: 'success', progress: 100, message: `Found ${newDeals.length} deals` };
-          return next;
-        });
-        setExtractionProgress(((i + 1) / files.length) * 100);
-      } catch (err: any) {
-        console.error(`Extraction error for file ${i}:`, err);
-        errorCount++;
-        
-        let errorMessage = "An unknown error occurred";
-        if (err instanceof Error) {
-          errorMessage = err.message;
-        } else if (err && typeof err === 'object') {
-          if (err.type === 'error' || err.toString() === '[object ProgressEvent]') {
-            errorMessage = "Network error. Please check your internet connection.";
-          } else {
-            try {
-              errorMessage = JSON.stringify(err);
-            } catch (e) {
-              errorMessage = String(err);
+              // Explicitly free memory
+              canvas.width = 0;
+              canvas.height = 0;
+              thumbCanvas.width = 0;
+              thumbCanvas.height = 0;
+              img.src = '';
+
+              resolve({ base64String: dataUrl.split(',')[1], thumbnail: thumbDataUrl });
+            };
+            
+            img.onerror = () => {
+              reject(new Error('Failed to load image for compression. It might be corrupted or inaccessible.'));
+            };
+            
+            img.src = previews[idx];
+          });
+
+          setThumbnails(prev => {
+            const next = [...prev];
+            next[idx] = thumbnail;
+            return next;
+          });
+
+          setFileProgresses(prev => {
+            const next = [...prev];
+            next[idx] = { status: 'processing', progress: 40, message: 'Analyzing deals with AI...' };
+            return next;
+          });
+
+          // We converted it to jpeg during compression
+          const mimeType = 'image/jpeg';
+          let base64Data = base64String;
+          const flyerData = await extractDealsFromFlyer(base64Data, mimeType);
+          base64Data = ''; // Free memory
+          
+          setFileProgresses(prev => {
+            const next = [...prev];
+            next[idx] = { status: 'processing', progress: 80, message: 'Extracting product images...' };
+            return next;
+          });
+          
+          // Process images based on bounding boxes
+          const processImages = async (products: Product[]): Promise<Product[]> => {
+            if (!products || !Array.isArray(products)) {
+              return [];
             }
+            return new Promise((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                  resolve(products);
+                  return;
+                }
+
+                const updatedProducts = products.map(product => {
+                  if (product.bounding_box && product.bounding_box.length === 4) {
+                    const [ymin, xmin, ymax, xmax] = product.bounding_box;
+                    
+                    const y = (Math.min(ymin, ymax) / 1000) * img.height;
+                    const x = (Math.min(xmin, xmax) / 1000) * img.width;
+                    const height = (Math.abs(ymax - ymin) / 1000) * img.height;
+                    const width = (Math.abs(xmax - xmin) / 1000) * img.width;
+
+                    if (width > 0 && height > 0) {
+                      const MAX_CROP_SIZE = 200;
+                      let cropWidth = width;
+                      let cropHeight = height;
+                      if (cropWidth > MAX_CROP_SIZE || cropHeight > MAX_CROP_SIZE) {
+                        if (cropWidth > cropHeight) {
+                          cropHeight = (cropHeight / cropWidth) * MAX_CROP_SIZE;
+                          cropWidth = MAX_CROP_SIZE;
+                        } else {
+                          cropWidth = (cropWidth / cropHeight) * MAX_CROP_SIZE;
+                          cropHeight = MAX_CROP_SIZE;
+                        }
+                      }
+                      canvas.width = cropWidth;
+                      canvas.height = cropHeight;
+                      ctx.drawImage(img, x, y, width, height, 0, 0, cropWidth, cropHeight);
+                      const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                      return { ...product, image_url: dataUrl };
+                    }
+                  }
+                  return product;
+                });
+                
+                // Explicitly free memory
+                canvas.width = 0;
+                canvas.height = 0;
+                img.src = '';
+                
+                resolve(updatedProducts);
+              };
+              img.onerror = () => resolve(products);
+              img.src = previews[idx];
+            });
+          };
+
+          const productsWithImages = await processImages(flyerData.products);
+
+          // Map products to deals
+          const newDeals: Deal[] = productsWithImages.map(product => {
+            const defaultStartDate = new Date();
+            const defaultEndDate = new Date();
+            defaultEndDate.setDate(defaultEndDate.getDate() + 7);
+
+            const safeString = (val: any, fallback: string) => {
+              if (!val) return fallback;
+              if (typeof val === 'string') return val;
+              if (Array.isArray(val)) return val.join(', ');
+              try {
+                return JSON.stringify(val);
+              } catch (e) {
+                return fallback;
+              }
+            };
+
+            const generateProductId = (store: string, location: string, name: string, price: number | undefined, weight: string | undefined, brand: string | null | undefined) => {
+              const str = `${store}-${location}-${name}-${price || ''}-${weight || ''}-${brand || ''}`.toLowerCase().replace(/\s+/g, '-');
+              let hash = 0;
+              for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+              }
+              return `prod-${Math.abs(hash).toString(36)}`;
+            };
+
+            const storeName = safeString(flyerData.store, 'Unknown Store').replace(/["{}]/g, '');
+            const locationName = safeString(flyerData.location, 'Unknown Location').replace(/["{}]/g, '');
+
+            return {
+              ...product,
+              product_id: generateProductId(storeName, locationName, product.name, product.price, product.weight, product.brand),
+              store: storeName,
+              location: locationName,
+              start_date: (() => {
+                const d = new Date(flyerData.promotion_period?.start_date || '');
+                return isNaN(d.getTime()) ? defaultStartDate.toISOString() : d.toISOString();
+              })(),
+              end_date: (() => {
+                const d = new Date(flyerData.promotion_period?.end_date || '');
+                // If invalid date or date is in the past, use default (7 days from now)
+                if (isNaN(d.getTime()) || d.getTime() < Date.now()) {
+                  return defaultEndDate.toISOString();
+                }
+                return d.toISOString();
+              })(),
+              terms_and_conditions: flyerData.terms_and_conditions,
+              store_hours: flyerData.store_hours,
+              traffic_status: flyerData.traffic_status,
+              uploaded_at: Date.now(),
+            };
+          });
+
+          setFileProgresses(prev => {
+            const next = [...prev];
+            next[idx] = { status: 'success', progress: 100, message: `Found ${newDeals.length} deals` };
+            return next;
+          });
+          completedCount++;
+          setExtractionProgress((completedCount / files.length) * 100);
+
+          return newDeals;
+        } catch (err: any) {
+          console.error(`Extraction error for file ${idx}:`, err);
+          errorCount++;
+          
+          let errorMessage = "An unknown error occurred";
+          if (err instanceof Error) {
+            errorMessage = err.message;
+          } else if (err && typeof err === 'object') {
+            if (err.type === 'error' || err.toString() === '[object ProgressEvent]') {
+              errorMessage = "Network error. Please check your internet connection.";
+            } else {
+              try {
+                errorMessage = JSON.stringify(err);
+              } catch (e) {
+                errorMessage = String(err);
+              }
+            }
+          } else {
+            errorMessage = String(err);
           }
-        } else {
-          errorMessage = String(err);
-        }
 
-        if (errorMessage.includes('parse response') || errorMessage.includes('No response') || errorMessage.includes('JSON')) {
-          errorMessage = "AI couldn't understand this flyer.";
-        } else if (errorMessage.includes('timed out')) {
-          errorMessage = "Extraction took too long.";
-        } else if (errorMessage.includes('Network error') || errorMessage.includes('fetch')) {
-          errorMessage = "Network error.";
-        }
+          if (errorMessage.includes('parse response') || errorMessage.includes('No response') || errorMessage.includes('JSON')) {
+            errorMessage = "AI couldn't understand this flyer.";
+          } else if (errorMessage.includes('timed out')) {
+            errorMessage = "Extraction took too long.";
+          } else if (errorMessage.includes('Network error') || errorMessage.includes('fetch')) {
+            errorMessage = "Network error.";
+          }
 
-        setFileProgresses(prev => {
-          const next = [...prev];
-          next[i] = { status: 'error', message: errorMessage, progress: 0 };
-          return next;
-        });
-      }
+          setFileProgresses(prev => {
+            const next = [...prev];
+            next[idx] = { status: 'error', message: errorMessage, progress: 0 };
+            return next;
+          });
+          completedCount++;
+          setExtractionProgress((completedCount / files.length) * 100);
+          return [];
+        }
+      }));
+      
+      chunkResults.forEach(deals => {
+        if (deals && deals.length > 0) {
+          allNewDeals = [...allNewDeals, ...deals];
+        }
+      });
     }
 
     setIsExtracting(false);
@@ -504,36 +579,48 @@ export default function UploadFlyer() {
 
   const addUploadedFlyer = useAppStore(state => state.addUploadedFlyer);
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
     const dealsToSave = extractedDeals.filter(d => selectedDeals.has(d.product_id));
     if (dealsToSave.length === 0) {
       setError("Please select at least one deal to save.");
       return;
     }
-    addDeals(dealsToSave);
     
-    // Add to history
-    files.forEach((file, index) => {
-      if (fileProgresses[index].status === 'success') {
-        // Find deals that belong to this flyer (approximation based on store/location if we don't have exact mapping)
-        // Since we process them sequentially and add to extractedDeals, we can just save the overall stats or try to map them.
-        // For simplicity, we'll just record the flyer and the total deals saved.
-        addUploadedFlyer({
-          id: `flyer-${Date.now()}-${index}`,
-          thumbnail: thumbnails[index] || previews[index],
-          uploadDate: new Date().toISOString(),
-          dealsExtracted: dealsToSave.length, // Total deals saved in this batch
-          store: dealsToSave[0]?.store || 'Unknown Store',
-          status: 'processed',
-          fileHash: fileProgresses[index].fileHash
-        });
-      }
-    });
+    setIsExtracting(true);
+    setExtractionStatus('Saving deals...');
+    
+    // Allow UI to update before heavy synchronous operations
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    try {
+      await addDeals(dealsToSave);
+      
+      // Add to history
+      files.forEach((file, index) => {
+        if (fileProgresses[index].status === 'success') {
+          addUploadedFlyer({
+            id: `flyer-${Date.now()}-${index}`,
+            thumbnail: thumbnails[index] || previews[index],
+            uploadDate: new Date().toISOString(),
+            dealsExtracted: dealsToSave.length, // Total deals saved in this batch
+            store: dealsToSave[0]?.store || 'Unknown Store',
+            status: 'processed',
+            fileHash: fileProgresses[index].fileHash
+          });
+        }
+      });
 
-    setSuccess(true);
-    setTimeout(() => {
-      navigate('/');
-    }, 2000);
+      setSuccess(true);
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to save deals:", err);
+      setError("Failed to save deals. Please try again.");
+    } finally {
+      setIsExtracting(false);
+      setExtractionStatus('');
+    }
   };
 
   const handleDecline = () => {
@@ -556,7 +643,7 @@ export default function UploadFlyer() {
         animate={{ opacity: 1, y: 0 }}
         className="space-y-6 pb-6"
       >
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md pb-4 pt-2 -mx-4 px-4 sm:-mx-0 sm:px-0 border-b border-slate-100 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-slate-900 font-display">Review Extracted Deals</h1>
             <p className="text-slate-500 mt-2 font-medium">
@@ -637,51 +724,91 @@ export default function UploadFlyer() {
           </div>
         </div>
 
-        {/* Batch Actions */}
-        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+        {/* Batch Actions & Filters */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-sm gap-4">
           <div className="flex items-center gap-3">
             <input
               type="checkbox"
-              checked={selectedDeals.size === extractedDeals.length && extractedDeals.length > 0}
+              checked={selectedDeals.size === filteredExtractedDeals.length && filteredExtractedDeals.length > 0}
               onChange={handleToggleAll}
               className="w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
             />
             <span className="text-sm font-bold text-slate-700">
               {selectedDeals.size} selected
             </span>
+            {selectedDeals.size > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-1.5 ml-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Remove
+              </button>
+            )}
           </div>
-          {selectedDeals.size > 0 && (
+          
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
             <button
-              onClick={handleDeleteSelected}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 px-4 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+              onClick={() => setReviewFilter('all')}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                reviewFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+              }`}
             >
-              <Trash2 className="w-4 h-4" />
-              Remove Selected
+              All Deals ({extractedDeals.length})
             </button>
-          )}
+            <button
+              onClick={() => setReviewFilter('missing_price')}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                reviewFilter === 'missing_price' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              Missing Price
+            </button>
+            <button
+              onClick={() => setReviewFilter('missing_name')}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                reviewFilter === 'missing_name' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              Missing Name
+            </button>
+          </div>
         </div>
 
         {/* Deals Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
           <AnimatePresence>
-            {extractedDeals.map((deal, idx) => (
+            {filteredExtractedDeals.map((deal, idx) => {
+              const isMissingPrice = !deal.price && (!deal.variants || deal.variants.length === 0);
+              const isMissingName = !deal.name || deal.name.length < 3;
+              const hasWarning = isMissingPrice || isMissingName;
+
+              return (
               <motion.div 
                 key={`${deal.product_id}-${idx}`} 
                 layout
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className={`bg-white border rounded-3xl overflow-hidden transition-all ${
-                  selectedDeals.has(deal.product_id) ? 'border-emerald-500 ring-2 ring-emerald-500 shadow-md' : 'border-slate-100 opacity-70 hover:opacity-100'
+                className={`break-inside-avoid bg-white border rounded-3xl overflow-hidden transition-all duration-300 ${
+                  selectedDeals.has(deal.product_id) ? 'border-emerald-500 ring-2 ring-emerald-500 shadow-lg -translate-y-1' : 'border-slate-200 opacity-90 hover:opacity-100 hover:shadow-md hover:-translate-y-1'
                 }`}
               >
-                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                  <input
-                    type="checkbox"
-                    checked={selectedDeals.has(deal.product_id)}
-                    onChange={() => handleToggleSelect(deal.product_id)}
-                    className="w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                  />
+                <div className={`p-4 border-b flex justify-between items-center ${hasWarning ? 'bg-amber-50 border-amber-100' : 'bg-slate-50/50 border-slate-100'}`}>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedDeals.has(deal.product_id)}
+                      onChange={() => handleToggleSelect(deal.product_id)}
+                      className="w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    {hasWarning && (
+                      <div className="flex items-center gap-1 text-amber-600" title="Missing important information">
+                        <AlertCircle className="w-4 h-4" />
+                        <span className="text-[10px] font-bold uppercase">Review Needed</span>
+                      </div>
+                    )}
+                  </div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{deal.category}</span>
                 </div>
                 <div className="p-5 flex flex-col gap-4">
@@ -694,11 +821,51 @@ export default function UploadFlyer() {
                       <FileImage className="w-8 h-8 text-slate-300" />
                     </div>
                   )}
-                  <div>
-                    <h3 className="font-bold text-slate-900 line-clamp-2 font-display" title={deal.name}>{deal.name}</h3>
-                    <p className="text-sm text-slate-500 mt-1 font-medium">{deal.weight || deal.brand || 'No weight specified'}</p>
+                  <div className="group/edit relative">
+                    {editingDealId === deal.product_id ? (
+                      <input 
+                        type="text" 
+                        value={deal.name} 
+                        onChange={(e) => handleDealEdit(deal.product_id, 'name', e.target.value)}
+                        className="w-full font-bold text-slate-900 font-display border-b-2 border-emerald-500 focus:outline-none bg-emerald-50 px-1 rounded-t"
+                        autoFocus
+                        onBlur={() => setEditingDealId(null)}
+                        onKeyDown={(e) => e.key === 'Enter' && setEditingDealId(null)}
+                      />
+                    ) : (
+                      <h3 
+                        className={`font-bold text-slate-900 line-clamp-2 font-display cursor-pointer hover:text-emerald-600 ${isMissingName ? 'text-red-500' : ''}`} 
+                        title={deal.name}
+                        onClick={() => setEditingDealId(deal.product_id)}
+                      >
+                        {deal.name || 'Missing Product Name'}
+                        <Edit2 className="w-3 h-3 inline-block ml-1 opacity-0 group-hover/edit:opacity-100 transition-opacity text-emerald-500" />
+                      </h3>
+                    )}
+                    
+                    {editingDealId === `${deal.product_id}-weight` ? (
+                      <input 
+                        type="text" 
+                        value={deal.weight || ''} 
+                        placeholder="Weight/Size"
+                        onChange={(e) => handleDealEdit(deal.product_id, 'weight', e.target.value)}
+                        className="w-full text-sm text-slate-700 mt-1 border-b-2 border-emerald-500 focus:outline-none bg-emerald-50 px-1 rounded-t"
+                        autoFocus
+                        onBlur={() => setEditingDealId(null)}
+                        onKeyDown={(e) => e.key === 'Enter' && setEditingDealId(null)}
+                      />
+                    ) : (
+                      <p 
+                        className="text-sm text-slate-500 mt-1 font-medium cursor-pointer hover:text-emerald-600 group/weight"
+                        onClick={() => setEditingDealId(`${deal.product_id}-weight`)}
+                      >
+                        {deal.weight || deal.brand || 'No weight specified'}
+                        <Edit2 className="w-3 h-3 inline-block ml-1 opacity-0 group-hover/weight:opacity-100 transition-opacity text-emerald-500" />
+                      </p>
+                    )}
+
                     {deal.tags && deal.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
+                      <div className="flex flex-wrap gap-1 mt-3">
                         {deal.tags.map((tag, idx) => {
                           let colorClass = "bg-slate-50 text-slate-700 border-slate-200";
                           const lowerTag = tag.toLowerCase();
@@ -716,12 +883,26 @@ export default function UploadFlyer() {
                       </div>
                     )}
                   </div>
-                  <div className="mt-auto pt-2 flex items-end justify-between">
-                    <div>
+                  <div className="mt-auto pt-2 flex items-end justify-between group/price">
+                    <div className="cursor-pointer" onClick={() => setEditingDealId(`${deal.product_id}-price`)}>
                       <span className="text-xs font-bold text-slate-400 uppercase">{deal.currency || 'FJD'}</span>
-                      <span className="text-2xl font-black text-emerald-600 ml-1 font-display tracking-tight">
-                        {deal.price ? deal.price.toFixed(2) : (deal.variants?.[0]?.price?.toFixed(2) || 'N/A')}
-                      </span>
+                      {editingDealId === `${deal.product_id}-price` ? (
+                        <input 
+                          type="number" 
+                          step="0.01"
+                          value={deal.price || ''} 
+                          onChange={(e) => handleDealEdit(deal.product_id, 'price', parseFloat(e.target.value))}
+                          className="w-20 text-2xl font-black text-emerald-600 ml-1 font-display tracking-tight border-b-2 border-emerald-500 focus:outline-none bg-emerald-50 px-1 rounded-t"
+                          autoFocus
+                          onBlur={() => setEditingDealId(null)}
+                          onKeyDown={(e) => e.key === 'Enter' && setEditingDealId(null)}
+                        />
+                      ) : (
+                        <span className={`text-2xl font-black ml-1 font-display tracking-tight hover:text-emerald-700 ${isMissingPrice ? 'text-red-500' : 'text-emerald-600'}`}>
+                          {deal.price ? deal.price.toFixed(2) : (deal.variants?.[0]?.price?.toFixed(2) || 'N/A')}
+                          <Edit2 className="w-4 h-4 inline-block ml-1 opacity-0 group-hover/price:opacity-100 transition-opacity text-emerald-500" />
+                        </span>
+                      )}
                     </div>
                     {deal.deal_type && (
                       <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2.5 py-1.5 rounded-lg uppercase tracking-wider">
@@ -731,7 +912,8 @@ export default function UploadFlyer() {
                   </div>
                 </div>
               </motion.div>
-            ))}
+              );
+            })}
           </AnimatePresence>
         </div>
 
@@ -765,18 +947,28 @@ export default function UploadFlyer() {
       </div>
 
       <div 
-        className={`border-2 border-dashed rounded-3xl p-8 text-center transition-colors ${
-          files.length > 0 ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200 hover:border-indigo-300 bg-white'
+        className={`border-2 border-dashed rounded-3xl p-8 text-center transition-all duration-300 ${
+          isDragging 
+            ? 'border-emerald-500 bg-emerald-50 scale-[1.02] shadow-lg' 
+            : files.length > 0 
+              ? 'border-emerald-400 bg-emerald-50/50' 
+              : 'border-slate-200 hover:border-emerald-300 bg-white'
         } ${isOffline ? 'opacity-50 pointer-events-none' : ''}`}
         onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         <div className="flex flex-col items-center justify-center py-8">
-          <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
-            {isOffline ? <WifiOff className="w-10 h-10 text-slate-400" /> : <Upload className="w-10 h-10 text-indigo-500" />}
-          </div>
+          <motion.div 
+            animate={{ y: isDragging ? 10 : 0, scale: isDragging ? 1.1 : 1 }}
+            className={`w-20 h-20 rounded-full flex items-center justify-center mb-6 transition-colors ${
+              isDragging ? 'bg-emerald-100' : 'bg-emerald-50'
+            }`}
+          >
+            {isOffline ? <WifiOff className="w-10 h-10 text-slate-400" /> : <Upload className={`w-10 h-10 transition-colors ${isDragging ? 'text-emerald-600' : 'text-emerald-500'}`} />}
+          </motion.div>
           <h3 className="text-xl font-bold text-slate-900 mb-2 font-display">
-            {isOffline ? 'Offline Mode' : 'Drag and drop your flyers here'}
+            {isOffline ? 'Offline Mode' : isDragging ? 'Drop flyers here!' : 'Drag and drop your flyers here'}
           </h3>
           <p className="text-slate-500 mb-8 max-w-sm font-medium">
             {isOffline 
@@ -846,9 +1038,9 @@ export default function UploadFlyer() {
         <div className="bg-white border border-slate-100 rounded-3xl p-8 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isExtracting ? 'bg-indigo-50' : 'bg-slate-50'}`}>
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isExtracting ? 'bg-emerald-50' : 'bg-slate-50'}`}>
                 {isExtracting ? (
-                  <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+                  <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
                 ) : (
                   <FileImage className="w-6 h-6 text-slate-600" />
                 )}
@@ -863,14 +1055,22 @@ export default function UploadFlyer() {
               </div>
             </div>
             {isExtracting && (
-              <span className="text-lg font-black text-indigo-600 font-display">{Math.round(extractionProgress)}%</span>
+              <div className="flex items-center gap-4">
+                <span className="text-lg font-black text-emerald-600 font-display">{Math.round(extractionProgress)}%</span>
+                <button
+                  onClick={handleCancel}
+                  className="px-4 py-2 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             )}
           </div>
           
           {isExtracting && (
             <div className="w-full bg-slate-100 rounded-full h-3 mb-2 overflow-hidden">
               <motion.div 
-                className="bg-indigo-600 h-3 rounded-full"
+                className="bg-emerald-600 h-3 rounded-full"
                 initial={{ width: 0 }}
                 animate={{ width: `${extractionProgress}%` }}
                 transition={{ duration: 0.3 }}
@@ -880,37 +1080,89 @@ export default function UploadFlyer() {
 
           {/* Individual File Progress */}
           {fileProgresses.length > 0 && (
-            <div className="mt-6 space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
               {files.map((file, idx) => {
                 const progress = fileProgresses[idx];
                 if (!progress) return null;
                 
                 return (
-                  <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      {progress.status === 'pending' && <div className="w-5 h-5 rounded-full border-2 border-slate-300 flex-shrink-0" />}
-                      {progress.status === 'processing' && <Loader2 className="w-5 h-5 text-indigo-500 animate-spin flex-shrink-0" />}
-                      {progress.status === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />}
-                      {progress.status === 'error' && <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />}
-                      {progress.status === 'skipped' && <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />}
+                  <div key={idx} className="relative rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm aspect-[3/4] group">
+                    <img 
+                      src={previews[idx]} 
+                      alt={`Flyer preview ${idx + 1}`} 
+                      className={`w-full h-full object-cover transition-opacity ${progress.status === 'processing' ? 'opacity-50' : ''}`}
+                    />
+                    
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-slate-900/20 backdrop-blur-[1px]">
+                      {progress.status === 'pending' && <div className="w-10 h-10 rounded-full border-4 border-white/50 flex-shrink-0 shadow-sm" />}
+                      {progress.status === 'processing' && (
+                        <div className="relative w-12 h-12 flex items-center justify-center">
+                          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                            <path
+                              className="text-white/30"
+                              strokeWidth="4"
+                              stroke="currentColor"
+                              fill="none"
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            />
+                            <path
+                              className="text-emerald-500 transition-all duration-300"
+                              strokeWidth="4"
+                              strokeDasharray={`${progress.progress || 0}, 100`}
+                              stroke="currentColor"
+                              fill="none"
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            />
+                          </svg>
+                          <span className="absolute text-[10px] font-bold text-white shadow-sm">{Math.round(progress.progress || 0)}%</span>
+                        </div>
+                      )}
+                      {progress.status === 'success' && <CheckCircle2 className="w-10 h-10 text-emerald-400 drop-shadow-md" />}
+                      {progress.status === 'error' && <AlertCircle className="w-10 h-10 text-red-400 drop-shadow-md" />}
+                      {progress.status === 'skipped' && <AlertCircle className="w-10 h-10 text-amber-400 drop-shadow-md" />}
                       
-                      <div className="truncate">
-                        <p className="text-sm font-bold text-slate-700 truncate">{file.name}</p>
-                        <p className={`text-xs font-medium truncate ${
-                          progress.status === 'error' ? 'text-red-500' : 
-                          progress.status === 'skipped' ? 'text-amber-600' : 'text-slate-500'
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-900/90 to-transparent p-3 pt-6">
+                        <p className="text-white text-xs font-bold truncate drop-shadow-sm">{file.name}</p>
+                        <p className={`text-[10px] font-medium truncate drop-shadow-sm ${
+                          progress.status === 'error' ? 'text-red-300' : 
+                          progress.status === 'skipped' ? 'text-amber-300' : 'text-slate-200'
                         }`}>
                           {progress.message || (progress.status === 'pending' ? 'Waiting...' : '')}
                         </p>
                       </div>
                     </div>
-                    
-                    {progress.status === 'processing' && progress.progress !== undefined && (
-                      <span className="text-xs font-bold text-indigo-600 ml-4">{Math.round(progress.progress)}%</span>
-                    )}
                   </div>
                 );
               })}
+            </div>
+          )}
+          
+          {/* Skeleton Loaders */}
+          {isExtracting && (
+            <div className="mt-8">
+              <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Analyzing Deals...</h4>
+              <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="break-inside-avoid bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm animate-pulse">
+                    <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
+                      <div className="w-5 h-5 bg-slate-200 rounded"></div>
+                      <div className="w-16 h-3 bg-slate-200 rounded"></div>
+                    </div>
+                    <div className="p-5 flex flex-col gap-4">
+                      <div className="h-40 bg-slate-100 rounded-2xl"></div>
+                      <div>
+                        <div className="h-5 bg-slate-200 rounded w-3/4 mb-2"></div>
+                        <div className="h-5 bg-slate-200 rounded w-1/2"></div>
+                        <div className="h-3 bg-slate-100 rounded w-1/3 mt-3"></div>
+                      </div>
+                      <div className="mt-auto pt-4 flex items-end justify-between">
+                        <div className="w-24 h-8 bg-slate-200 rounded"></div>
+                        <div className="w-16 h-6 bg-slate-100 rounded-lg"></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -931,7 +1183,7 @@ export default function UploadFlyer() {
         <button
           onClick={handleExtract}
           disabled={files.length === 0 || isExtracting || isOffline}
-          className={`bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-8 rounded-xl flex items-center gap-2 transition-colors shadow-sm hover:shadow-md ${
+          className={`bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-8 rounded-xl flex items-center gap-2 transition-colors shadow-sm hover:shadow-md ${
             (files.length === 0 || isExtracting || isOffline) ? 'opacity-50 cursor-not-allowed hover:shadow-sm' : ''
           }`}
         >

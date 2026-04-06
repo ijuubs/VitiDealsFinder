@@ -14,6 +14,7 @@ export interface Product {
   description?: string;
   variants?: Variant[];
   price?: number;
+  original_price?: number;
   unit?: string;
   weight?: string;
   price_per_unit?: number | null;
@@ -56,6 +57,9 @@ export interface Deal extends Product {
   store_hours?: string;
   traffic_status?: string;
   uploaded_at?: number;
+  upvotes?: number;
+  downvotes?: number;
+  outOfStock?: boolean;
 }
 
 export interface ListItem {

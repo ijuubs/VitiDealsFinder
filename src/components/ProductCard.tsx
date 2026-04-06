@@ -2,8 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { Deal } from '../types';
 import { useAppStore } from '../store';
 import CompareModal from './CompareModal';
+import ProductDetailsModal from './ProductDetailsModal';
 import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm, isBasicNeed, isFoodItem } from '../utils/helpers';
-import { BadgeCheck, ShoppingBasket, Leaf, MapPin, TrendingDown, Calendar, LineChart, Lightbulb, Car, Clock, Store, ShoppingCart, ArrowRightLeft, Star, Trash2 } from 'lucide-react';
+import { BadgeCheck, ShoppingBasket, Leaf, MapPin, TrendingDown, Calendar, LineChart, Lightbulb, Car, Clock, Store, ListPlus, ArrowRightLeft, Star, Trash2, ThumbsUp, ThumbsDown, AlertTriangle, Share2 } from 'lucide-react';
 
 const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: {lat: number, lon: number} | null }> = ({ deal, isBestValue, userLocation }) => {
   const addToShoppingList = useAppStore(state => state.addToShoppingList);
@@ -13,12 +14,18 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
   const addToCompareList = useAppStore(state => state.addToCompareList);
   const removeFromCompareList = useAppStore(state => state.removeFromCompareList);
   const removeDeal = useAppStore(state => state.removeDeal);
+  const upvoteDeal = useAppStore(state => state.upvoteDeal);
+  const downvoteDeal = useAppStore(state => state.downvoteDeal);
+  const flagOutOfStock = useAppStore(state => state.flagOutOfStock);
   const isAdmin = useAppStore(state => state.isAdmin);
+  const transportMode = useAppStore(state => state.transportMode);
   const [showCompare, setShowCompare] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   const isComparing = compareList.some(d => d.product_id === deal.product_id);
 
-  const handleCompareToggle = () => {
+  const handleCompareToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (isComparing) {
       removeFromCompareList(deal.product_id);
     } else {
@@ -28,6 +35,22 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
 
   const currentPrice = getEffectivePrice(deal);
   const { pricePerKg, unit } = getNormalizedPrice(deal);
+
+  const distance = useMemo(() => {
+    if (!userLocation) return null;
+    const coords = getStoreCoordinates(deal.location);
+    if (!coords) return null;
+    return getDistanceFromLatLonInKm(userLocation.lat, userLocation.lon, coords.lat, coords.lon);
+  }, [userLocation, deal.location]);
+
+  const transportCost = useMemo(() => {
+    if (transportMode === 'walking' || !distance) return 0;
+    if (transportMode === 'driving') return distance * 0.5;
+    if (transportMode === 'bus') return 1.50;
+    return 0;
+  }, [transportMode, distance]);
+
+  const realPrice = currentPrice + transportCost;
 
   const comparableDeals = useMemo(() => {
     if (!deal?.name) return [];
@@ -44,6 +67,11 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
   const savingsPercentage = averageMarketPrice && averageMarketPrice > 0 ? (savingsValue / averageMarketPrice) * 100 : 0;
 
   const isExpired = useMemo(() => new Date(deal.end_date) < new Date(), [deal.end_date]);
+
+  const daysLeft = useMemo(() => {
+    const diffTime = Math.abs(new Date(deal.end_date).getTime() - new Date().getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  }, [deal.end_date]);
 
   const currentListSavings = useMemo(() => {
     let savings = 0;
@@ -69,13 +97,6 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
   }, [shoppingList, allDeals]);
 
   const totalTripSavings = currentListSavings + (savingsValue > 0 && !isExpired ? savingsValue : 0);
-
-  const distance = useMemo(() => {
-    if (!userLocation) return null;
-    const coords = getStoreCoordinates(deal.location);
-    if (!coords) return null;
-    return getDistanceFromLatLonInKm(userLocation.lat, userLocation.lon, coords.lat, coords.lon);
-  }, [userLocation, deal.location]);
 
   // Mock data generators for enhanced UI
   const rating = useMemo(() => {
@@ -142,8 +163,22 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
     'E': 'bg-red-600'
   }[nutriScore];
 
+  const handleShare = () => {
+    const text = `Check out this deal: ${deal.name} for $${currentPrice.toFixed(2)} at ${deal.store}!`;
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({ title: 'Great Deal!', text, url }).catch(console.error);
+    } else {
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`;
+      window.open(whatsappUrl, '_blank');
+    }
+  };
+
   return (
-    <main className={`rounded-2xl relative flex flex-col overflow-hidden transition-all duration-200 h-full ${
+    <>
+    <main 
+      onClick={() => setShowDetails(true)}
+      className={`rounded-2xl relative flex flex-col overflow-hidden transition-all duration-200 h-full cursor-pointer ${
       isExpired ? 'bg-white border border-red-200 opacity-80 shadow-sm' : 
       isBestValue ? 'bg-emerald-50/50 border-2 border-emerald-500 shadow-lg shadow-emerald-500/20 scale-[1.01]' : 
       'bg-white border border-gray-200 shadow-sm hover:shadow-md'
@@ -168,10 +203,27 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
               In Stock
             </span>
           )}
-          {deal.verified && (
+          {!isExpired && daysLeft > 0 && daysLeft <= 3 && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-200">
+              <Clock className="w-3 h-3 mr-1 text-orange-500" />
+              {daysLeft} {daysLeft === 1 ? 'Day' : 'Days'} Left
+            </span>
+          )}
+          {distance !== null && distance < 2 && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200">
+              <MapPin className="w-3 h-3 mr-1 text-blue-500" />
+              Nearest
+            </span>
+          )}
+          {deal.verified ? (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
               <BadgeCheck className="w-3 h-3 mr-1 text-blue-500" />
-              Verified Deal
+              Community Verified
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-50 text-slate-500 border border-slate-200">
+              <AlertTriangle className="w-3 h-3 mr-1 text-slate-400" />
+              Unverified
             </span>
           )}
           {isBasicNeed(deal) && (
@@ -284,8 +336,16 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
           <span className="text-3xl font-extrabold text-gray-900">${currentPrice.toFixed(2)}</span>
           <span className="text-sm font-medium text-gray-500">/{unit || deal.unit || 'ea'}</span>
         </div>
+        {transportCost > 0 && (
+          <div className="text-xs font-medium text-slate-500 mt-0.5 flex items-center gap-1">
+            <span>True Cost: <strong className="text-slate-700">${realPrice.toFixed(2)}</strong></span>
+            <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+              +${transportCost.toFixed(2)} {transportMode}
+            </span>
+          </div>
+        )}
         {isBestValue && savingsValue > 0 && (
-          <div className="text-sm font-bold text-emerald-600 mt-0.5 flex items-center gap-1">
+          <div className="text-sm font-bold text-emerald-600 mt-1 flex items-center gap-1">
             <TrendingDown className="w-4 h-4" />
             Save ${savingsValue.toFixed(2)} vs average
           </div>
@@ -394,18 +454,52 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
         <span className="text-sm font-black text-emerald-600">+{totalTripSavings > 0 ? '$' + totalTripSavings.toFixed(2) : '$0.00'}</span>
       </div>
 
+      {/* Community & Share */}
+      <div className="px-4 py-2 border-t border-gray-50 flex items-center justify-between bg-gray-50/50">
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={(e) => { e.stopPropagation(); upvoteDeal(deal.product_id); }}
+            className="flex items-center gap-1 text-gray-500 hover:text-emerald-600 transition-colors"
+          >
+            <ThumbsUp className="w-3.5 h-3.5" />
+            <span className="text-[10px] font-bold">{deal.upvotes || 0}</span>
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); downvoteDeal(deal.product_id); }}
+            className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors"
+          >
+            <ThumbsDown className="w-3.5 h-3.5" />
+            <span className="text-[10px] font-bold">{deal.downvotes || 0}</span>
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); flagOutOfStock(deal.product_id); }}
+            className={`flex items-center gap-1 transition-colors ml-2 ${deal.outOfStock ? 'text-orange-500' : 'text-gray-400 hover:text-orange-500'}`}
+            title="Flag as Out of Stock"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <button 
+          onClick={(e) => { e.stopPropagation(); handleShare(); }}
+          className="text-gray-400 hover:text-[#0097b2] transition-colors"
+          title="Share Deal"
+        >
+          <Share2 className="w-4 h-4" />
+        </button>
+      </div>
+
       {/* Action Buttons */}
       <div className="px-4 pb-4 pt-2 mt-auto">
         <button 
-          onClick={() => !isExpired && addToShoppingList(deal)}
+          onClick={(e) => { e.stopPropagation(); !isExpired && addToShoppingList(deal); }}
           disabled={isExpired}
           className={`w-full py-2.5 ${isExpired ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'bg-emerald-500 hover:bg-emerald-600 text-white active:scale-[0.98]'} font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm`}
         >
-          <ShoppingCart className="w-4 h-4" />
+          <ListPlus className="w-4 h-4" />
           {isExpired ? 'Deal Expired' : 'Add to List'}
         </button>
         <button 
-          onClick={() => setShowCompare(true)}
+          onClick={(e) => { e.stopPropagation(); setShowCompare(true); }}
           disabled={comparableDeals.length <= 1}
           className={`w-full py-2 mt-2 border border-gray-200 bg-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1 transition-colors ${
             comparableDeals.length <= 1 ? 'text-gray-400 cursor-not-allowed opacity-70' : 'text-gray-700 hover:bg-gray-50'
@@ -418,6 +512,15 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
       
       {showCompare && <CompareModal deal={deal} onClose={() => setShowCompare(false)} />}
     </main>
+    <ProductDetailsModal 
+      deal={deal}
+      isOpen={showDetails}
+      onClose={() => setShowDetails(false)}
+      distance={distance}
+      daysLeft={daysLeft}
+      isExpired={isExpired}
+    />
+    </>
   );
 };
 

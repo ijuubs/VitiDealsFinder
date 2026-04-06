@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppStore } from '../store';
 import ProductCard from '../components/ProductCard';
-import { Search, SlidersHorizontal, Upload, MapPin, TrendingDown, Trophy, ShoppingBasket, ScanLine, ShoppingCart, Droplets, Wheat, Database, Apple } from 'lucide-react';
+import { Search, SlidersHorizontal, Upload, MapPin, TrendingDown, Trophy, ShoppingBasket, ScanLine, ListTodo, Droplets, Wheat, Database, Apple, Bell } from 'lucide-react';
 import { Deal } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { getEffectivePrice, getNormalizedPrice, getStoreCoordinates, getDistanceFromLatLonInKm, isBasicNeed } from '../utils/helpers';
@@ -13,6 +13,7 @@ export default function Home() {
   const setUserLocation = useAppStore(state => state.setUserLocation);
   const selectedRegion = useAppStore(state => state.selectedRegion);
   const setSelectedRegion = useAppStore(state => state.setSelectedRegion);
+  const isAdmin = useAppStore(state => state.isAdmin);
   const navigate = useNavigate();
   
   // Filter out expired deals for the main view, but fallback to all if none are active
@@ -24,6 +25,16 @@ export default function Home() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const allDealsRef = useRef<HTMLDivElement>(null);
+
+  const handleCategoryClick = (category: string) => {
+    setSelectedCategory(selectedCategory === category ? null : category);
+    if (selectedCategory !== category) {
+      setTimeout(() => {
+        allDealsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  };
   const [activeFilter, setActiveFilter] = useState<'all' | 'basic_needs' | 'best_value' | 'cheapest_kg' | 'highest_savings' | 'nearby'>('all');
 
   const locationRequested = React.useRef(false);
@@ -195,15 +206,19 @@ export default function Home() {
             Digital Flyers<br />at Your Fingertips
           </h1>
           <p className="text-cyan-50 text-sm mb-6 leading-relaxed font-medium">
-            Scan any physical flyer to instantly compare prices across your region.
+            {isAdmin 
+              ? "Scan any physical flyer to instantly compare prices across your region."
+              : "Browse digital flyers to instantly compare prices across your region."}
           </p>
-          <button 
-            onClick={() => navigate('/upload')}
-            className="bg-white text-[#0097b2] px-6 py-3.5 rounded-2xl font-bold flex items-center gap-2 shadow-xl shadow-black/10 hover:bg-cyan-50 transition-all active:scale-95"
-          >
-            <ScanLine className="w-5 h-5" />
-            Scan Now
-          </button>
+          {isAdmin && (
+            <button 
+              onClick={() => navigate('/upload')}
+              className="bg-white text-[#0097b2] px-6 py-3.5 rounded-2xl font-bold flex items-center gap-2 shadow-xl shadow-black/10 hover:bg-cyan-50 transition-all active:scale-95"
+            >
+              <ScanLine className="w-5 h-5" />
+              Scan Now
+            </button>
+          )}
         </div>
         
         {/* Decorative Elements */}
@@ -215,25 +230,47 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Top Deals */}
-      <div>
-        <div className="flex justify-between items-end mb-4">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 font-display">Today's Top 10 Basic Needs Deals</h2>
-            <p className="text-sm text-slate-500">Verified 2 hours ago</p>
-          </div>
-          <button className="text-[#0097b2] font-bold text-sm">See all</button>
-        </div>
-        
-        <div className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar -mx-4 px-4">
-          {topDeals.map(deal => (
-            <div key={deal.product_id} className="min-w-[240px] w-[240px] flex-shrink-0">
-              <ProductCard deal={deal} isBestValue={true} userLocation={userLocation} />
+      {/* Promotional Banners */}
+      <div className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar -mx-4 px-4">
+        {/* Banner 1: Top 10 Basic Needs */}
+        <div 
+          onClick={() => {
+            setActiveFilter('basic_needs');
+            document.getElementById('all-deals-section')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          className="min-w-[280px] sm:min-w-[320px] bg-gradient-to-br from-rose-500 to-pink-600 rounded-[2rem] p-6 relative overflow-hidden shadow-sm cursor-pointer hover:shadow-md transition-all active:scale-[0.98] flex-shrink-0"
+        >
+          <div className="relative z-10 w-3/4">
+            <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-full mb-3">
+              <TrendingDown className="w-3 h-3 text-white" />
+              <span className="text-white text-[10px] font-bold tracking-wider uppercase">Hot Deals</span>
             </div>
-          ))}
-          {topDeals.length === 0 && (
-            <div className="text-slate-500 py-8 text-center w-full">No basic needs deals found for your current location.</div>
-          )}
+            <h3 className="text-xl font-black text-white mb-1 font-display leading-tight">Top 10 Basic Needs</h3>
+            <p className="text-rose-100 text-sm font-medium">Save big on everyday essentials</p>
+          </div>
+          <div className="absolute right-4 bottom-4 z-10 w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center">
+            <ShoppingBasket className="w-8 h-8 text-white" />
+          </div>
+          <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+        </div>
+
+        {/* Banner 2: Smart Watchlist */}
+        <div 
+          onClick={() => navigate('/savings#smart-watchlist')}
+          className="min-w-[280px] sm:min-w-[320px] bg-gradient-to-br from-amber-400 to-orange-500 rounded-[2rem] p-6 relative overflow-hidden shadow-sm cursor-pointer hover:shadow-md transition-all active:scale-[0.98] flex-shrink-0"
+        >
+          <div className="relative z-10 w-3/4">
+            <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-full mb-3">
+              <Bell className="w-3 h-3 text-white" />
+              <span className="text-white text-[10px] font-bold tracking-wider uppercase">Alerts</span>
+            </div>
+            <h3 className="text-xl font-black text-white mb-1 font-display leading-tight">Smart Watchlist</h3>
+            <p className="text-amber-50 text-sm font-medium">Track your favorite items and prices</p>
+          </div>
+          <div className="absolute right-4 bottom-4 z-10 w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center">
+            <ListTodo className="w-8 h-8 text-white" />
+          </div>
+          <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
         </div>
       </div>
 
@@ -244,7 +281,7 @@ export default function Home() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div 
-            onClick={() => setSelectedCategory(selectedCategory === 'Dairy' ? null : 'Dairy')}
+            onClick={() => handleCategoryClick('Dairy')}
             className={`bg-white border rounded-[2rem] p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all group ${selectedCategory === 'Dairy' ? 'border-cyan-500 shadow-lg shadow-cyan-100/50' : 'border-slate-100 hover:border-cyan-200 hover:shadow-lg hover:shadow-cyan-100/50'}`}
           >
             <div className="w-16 h-16 bg-cyan-50 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
@@ -253,7 +290,7 @@ export default function Home() {
             <span className="font-bold text-slate-700">Dairy</span>
           </div>
           <div 
-            onClick={() => setSelectedCategory(selectedCategory === 'Bakery' ? null : 'Bakery')}
+            onClick={() => handleCategoryClick('Bakery')}
             className={`bg-white border rounded-[2rem] p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all group ${selectedCategory === 'Bakery' ? 'border-amber-500 shadow-lg shadow-amber-100/50' : 'border-slate-100 hover:border-amber-200 hover:shadow-lg hover:shadow-amber-100/50'}`}
           >
             <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
@@ -262,16 +299,16 @@ export default function Home() {
             <span className="font-bold text-slate-700">Bakery</span>
           </div>
           <div 
-            onClick={() => setSelectedCategory(selectedCategory === 'Canned Goods' ? null : 'Canned Goods')}
-            className={`bg-white border rounded-[2rem] p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all group ${selectedCategory === 'Canned Goods' ? 'border-indigo-500 shadow-lg shadow-indigo-100/50' : 'border-slate-100 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-100/50'}`}
+            onClick={() => handleCategoryClick('Canned Goods')}
+            className={`bg-white border rounded-[2rem] p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all group ${selectedCategory === 'Canned Goods' ? 'border-emerald-500 shadow-lg shadow-emerald-100/50' : 'border-slate-100 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-100/50'}`}
           >
-            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <Database className="w-8 h-8 text-indigo-600 stroke-[1.5]" />
+            <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+              <Database className="w-8 h-8 text-emerald-600 stroke-[1.5]" />
             </div>
             <span className="font-bold text-slate-700">Canned Goods</span>
           </div>
           <div 
-            onClick={() => setSelectedCategory(selectedCategory === 'Produce' ? null : 'Produce')}
+            onClick={() => handleCategoryClick('Produce')}
             className={`bg-white border rounded-[2rem] p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all group ${selectedCategory === 'Produce' ? 'border-emerald-500 shadow-lg shadow-emerald-100/50' : 'border-slate-100 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-100/50'}`}
           >
             <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
@@ -282,22 +319,67 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Smart Watchlist Banner */}
-      <div className="bg-gradient-to-r from-yellow-400 to-orange-400 rounded-[2rem] p-6 relative overflow-hidden shadow-sm flex items-center justify-between">
-        <div className="relative z-10 w-2/3">
-          <h3 className="text-xl font-bold text-slate-900 mb-1">Smart Watchlist</h3>
-          <p className="text-slate-800 text-sm opacity-90">Get alerts when butter drops below $5.00</p>
+      {/* Deals Near You (Only show if location is known) */}
+      {userLocation && (
+        <div>
+          <div className="flex justify-between items-end mb-4">
+            <h2 className="text-2xl font-bold text-slate-900 font-display flex items-center gap-2">
+              <MapPin className="w-6 h-6 text-blue-500" />
+              Deals Near You
+            </h2>
+            <button 
+              onClick={() => {
+                setActiveFilter('nearby');
+                document.getElementById('all-deals-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="text-sm font-bold text-blue-600 hover:text-blue-700"
+            >
+              See all
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {dealsWithMetrics
+              .filter(d => d.distance < 5) // Within 5km
+              .sort((a, b) => a.distance - b.distance)
+              .slice(0, 4)
+              .map(deal => (
+                <ProductCard 
+                  key={deal.product_id} 
+                  deal={deal} 
+                  isBestValue={bestValueIds.has(deal.product_id)}
+                  userLocation={userLocation}
+                />
+              ))}
+          </div>
         </div>
-        <div className="relative z-10 w-14 h-14 bg-[#0097b2] rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
-          <ShoppingCart className="w-6 h-6 text-white" />
+      )}
+
+      {/* Today's Fresh Picks */}
+      <div>
+        <div className="flex justify-between items-end mb-4">
+          <h2 className="text-2xl font-bold text-slate-900 font-display flex items-center gap-2">
+            <Apple className="w-6 h-6 text-emerald-500" />
+            Today's Fresh Picks
+          </h2>
         </div>
-        
-        {/* Decorative circle */}
-        <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/20 rounded-full blur-xl"></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {dealsWithMetrics
+            .filter(d => d.category === 'Produce' || d.category === 'Meat' || d.category === 'Dairy')
+            .sort((a, b) => b.savings - a.savings)
+            .slice(0, 4)
+            .map(deal => (
+              <ProductCard 
+                key={deal.product_id} 
+                deal={deal} 
+                isBestValue={bestValueIds.has(deal.product_id)}
+                userLocation={userLocation}
+              />
+            ))}
+        </div>
       </div>
 
       {/* All Deals Section */}
-      <div>
+      <div id="all-deals-section">
         <div className="flex justify-between items-end mb-4">
           <h2 className="text-2xl font-bold text-slate-900 font-display">All Deals</h2>
         </div>
@@ -366,7 +448,7 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {visibleItems.map(deal => (
             <ProductCard 
               key={deal.product_id} 
