@@ -5,6 +5,13 @@ export interface Variant {
   unit: string;
 }
 
+export interface PricePoint {
+  price: number;
+  date: string;
+  store: string;
+  deal_type?: string;
+}
+
 export interface Product {
   product_id: string;
   name: string;
@@ -31,6 +38,7 @@ export interface Product {
   verified?: boolean;
   price_trend?: 'stable' | 'dropping' | 'rising';
   tags?: string[];
+  price_history?: PricePoint[];
 }
 
 export interface PromotionPeriod {
@@ -57,9 +65,11 @@ export interface Deal extends Product {
   store_hours?: string;
   traffic_status?: string;
   uploaded_at?: number;
+  flyer_id?: string;
   upvotes?: number;
   downvotes?: number;
   outOfStock?: boolean;
+  is_archived?: boolean;
 }
 
 export interface ListItem {
@@ -74,6 +84,6 @@ export interface UploadedFlyer {
   uploadDate: string;
   dealsExtracted: number;
   store: string;
-  status: 'processing' | 'processed' | 'failed';
+  status: 'processing' | 'processed' | 'failed' | 'archived';
   fileHash?: string;
 }

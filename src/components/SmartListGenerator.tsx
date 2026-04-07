@@ -1,11 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store';
-import { X, Sparkles, Plus, CheckCircle2, ShoppingBag, Users, DollarSign, Leaf, Loader2 } from 'lucide-react';
-import { getEffectivePrice, isBasicNeed, BASIC_NEED_KEYWORDS } from '../utils/helpers';
+import { X, Sparkles, Plus, CheckCircle2, ShoppingBag, Users, DollarSign, Leaf, Loader2, Car, Bus, Navigation } from 'lucide-react';
+import { getEffectivePrice, isBasicNeed, BASIC_NEED_KEYWORDS, getStoreCoordinates, getDistanceFromLatLonInKm, getNormalizedPrice, parseWeightToKg } from '../utils/helpers';
 import { Deal } from '../types';
+
+const TARGET_WEIGHTS: Record<string, number> = {
+  'rice': 1.5,
+  'flour': 1.0,
+  'sugar': 0.5,
+  'potato': 1.0,
+  'potatoes': 1.0,
+  'onion': 0.5,
+  'onions': 0.5,
+  'chicken': 1.0,
+  'dhal': 0.5,
+  'cooking oil': 0.5,
+  'milk': 1.0,
+  'soap': 0.2,
+  'toilet paper': 0.5,
+};
 
 export default function SmartListGenerator({ onClose }: { onClose: () => void }) {
   const allDeals = useAppStore(state => state.deals);
+  const userLocation = useAppStore(state => state.userLocation);
+  const selectedRegion = useAppStore(state => state.selectedRegion);
+  const transportMode = useAppStore(state => state.transportMode);
+  const setTransportMode = useAppStore(state => state.setTransportMode);
   const addToShoppingList = useAppStore(state => state.addToShoppingList);
   
   const [familySize, setFamilySize] = useState<number>(2);
@@ -14,13 +34,22 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedList, setGeneratedList] = useState<{deal: Deal, quantity: number}[] | null>(null);
 
+  // Get reference location for distance calculation
+  const refLocation = useMemo(() => {
+    if (userLocation) return userLocation;
+    if (selectedRegion !== 'all' && selectedRegion !== 'current') {
+      return getStoreCoordinates(selectedRegion);
+    }
+    return null;
+  }, [userLocation, selectedRegion]);
+
   const handleGenerate = () => {
     setIsGenerating(true);
     
     setTimeout(() => {
       const now = new Date();
-      let activeDeals = allDeals.filter(d => new Date(d.end_date) >= now);
-      if (activeDeals.length === 0) activeDeals = allDeals; // Fallback to all deals if none are active
+      let activeDeals = allDeals.filter(d => !d.is_archived && new Date(d.end_date) >= now);
+      if (activeDeals.length === 0) activeDeals = allDeals.filter(d => !d.is_archived);
       
       let basicNeeds = activeDeals.filter(d => isBasicNeed(d));
       
@@ -31,29 +60,65 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
         });
       }
       
-      const grouped = new Map<string, Deal[]>();
-      basicNeeds.forEach(d => {
-        const textToSearch = `${d.name} ${d.category} ${d.subcategory} ${d.brand}`.toLowerCase();
+      // Calculate scores for each deal
+      const scoredDeals = basicNeeds.map(d => {
+        const price = getEffectivePrice(d);
+        const { pricePerKg } = getNormalizedPrice(d);
+        const coords = getStoreCoordinates(d.location);
+        let distance = 0;
+        
+        if (refLocation && coords) {
+          distance = getDistanceFromLatLonInKm(refLocation.lat, refLocation.lon, coords.lat, coords.lon);
+        } else if (refLocation && !coords) {
+          // If we have a user location but don't know the store location, 
+          // assume it's at least 20km away to avoid prioritizing it over known close stores
+          distance = 20;
+        }
+
+        // SIGNIFICANTLY increase penalty for distance
+        // Walking: 5 points per km (very high)
+        // Bus: 2 points per km
+        // Driving: 1 point per km
+        const distancePenalty = transportMode === 'walking' ? 5 : transportMode === 'bus' ? 2 : 1;
+        
+        // Score: Higher is better
+        // Use price per kg if available, otherwise absolute price
+        const valuePrice = pricePerKg || price;
+        let score = (100 / valuePrice);
+        
+        // Subtract distance penalty
+        score -= (distance * distancePenalty);
+
+        // Hard penalty for very long distances (e.g., > 40km)
+        if (distance > 40) score -= 100;
+        if (distance > 80) score -= 500;
+
+        // Bonus for "dropping" price trend
+        if (d.price_trend === 'dropping') score += 5;
+        
+        return { deal: d, score, distance, price, pricePerKg };
+      }).filter(sd => sd.distance <= 60); // Hard filter for distance to ensure "Smart" choices
+
+      const grouped = new Map<string, typeof scoredDeals>();
+      scoredDeals.forEach(sd => {
+        const textToSearch = `${sd.deal.name} ${sd.deal.category} ${sd.deal.subcategory} ${sd.deal.brand}`.toLowerCase();
         
         // Find which keyword matched
-        const matchedKeyword = BASIC_NEED_KEYWORDS.find(kw => textToSearch.includes(kw)) || d.name.toLowerCase().trim();
+        const matchedKeyword = BASIC_NEED_KEYWORDS.find(kw => textToSearch.includes(kw)) || sd.deal.name.toLowerCase().trim();
         
         if (!grouped.has(matchedKeyword)) grouped.set(matchedKeyword, []);
-        grouped.get(matchedKeyword)!.push(d);
+        grouped.get(matchedKeyword)!.push(sd);
       });
       
-      const cheapestOptions: Deal[] = [];
+      const bestOptions: typeof scoredDeals = [];
       grouped.forEach(group => {
-        const cheapest = group.reduce((best, curr) => 
-          getEffectivePrice(curr) < getEffectivePrice(best) ? curr : best
-        );
-        cheapestOptions.push(cheapest);
+        // Pick the one with the highest score in each group
+        const best = group.reduce((prev, curr) => curr.score > prev.score ? curr : prev);
+        bestOptions.push(best);
       });
       
-      // Sort by price (lowest first) to fit more items in budget
-      cheapestOptions.sort((a, b) => getEffectivePrice(a) - getEffectivePrice(b));
-      
-      const multiplier = Math.max(1, Math.ceil(familySize / 2));
+      // Sort by score (highest first)
+      bestOptions.sort((a, b) => b.score - a.score);
       
       let currentTotal = 0;
       const newList: {deal: Deal, quantity: number}[] = [];
@@ -61,32 +126,40 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
       // Prioritize these essential keywords first
       const priorityKeywords = ['rice', 'flour', 'chicken', 'dhal', 'milk', 'cooking oil', 'soap', 'toilet paper'];
       
+      const getRequiredQty = (deal: Deal, keyword: string) => {
+        const targetWeight = TARGET_WEIGHTS[keyword] || 1.0;
+        const requiredWeight = targetWeight * familySize;
+        const itemWeight = parseWeightToKg(deal.weight) || 1.0;
+        return Math.max(1, Math.ceil(requiredWeight / itemWeight));
+      };
+
       // First pass: Add one of each priority item if it fits the budget
       for (const kw of priorityKeywords) {
-        const item = cheapestOptions.find(d => {
-          const textToSearch = `${d.name} ${d.category} ${d.subcategory} ${d.brand}`.toLowerCase();
+        const option = bestOptions.find(sd => {
+          const textToSearch = `${sd.deal.name} ${sd.deal.category} ${sd.deal.subcategory} ${sd.deal.brand}`.toLowerCase();
           return textToSearch.includes(kw);
         });
         
-        if (item && !newList.some(i => i.deal.product_id === item.product_id)) {
-          const price = getEffectivePrice(item);
-          const qty = multiplier;
-          if (currentTotal + (price * qty) <= budget) {
-            newList.push({ deal: item, quantity: qty });
-            currentTotal += price * qty;
+        if (option && !newList.some(i => i.deal.product_id === option.deal.product_id)) {
+          const qty = getRequiredQty(option.deal, kw);
+          if (currentTotal + (option.price * qty) <= budget) {
+            newList.push({ deal: option.deal, quantity: qty });
+            currentTotal += option.price * qty;
           }
         }
       }
       
-      // Second pass: Fill the rest of the budget with other cheapest options
-      for (const item of cheapestOptions) {
+      // Second pass: Fill the rest of the budget with other best options
+      for (const option of bestOptions) {
         if (currentTotal >= budget * 0.95) break;
-        if (!newList.some(i => i.deal.product_id === item.product_id)) {
-          const price = getEffectivePrice(item);
-          const qty = multiplier;
-          if (currentTotal + (price * qty) <= budget) {
-            newList.push({ deal: item, quantity: qty });
-            currentTotal += price * qty;
+        if (!newList.some(i => i.deal.product_id === option.deal.product_id)) {
+          const textToSearch = `${option.deal.name} ${option.deal.category} ${option.deal.subcategory} ${option.deal.brand}`.toLowerCase();
+          const kw = BASIC_NEED_KEYWORDS.find(k => textToSearch.includes(k)) || 'other';
+          const qty = getRequiredQty(option.deal, kw);
+          
+          if (currentTotal + (option.price * qty) <= budget) {
+            newList.push({ deal: option.deal, quantity: qty });
+            currentTotal += option.price * qty;
           }
         }
       }
@@ -99,9 +172,7 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
   const handleAddToList = () => {
     if (generatedList) {
       generatedList.forEach(item => {
-        for(let i = 0; i < item.quantity; i++) {
-            addToShoppingList(item.deal);
-        }
+        addToShoppingList(item.deal, item.quantity);
       });
       onClose();
     }
@@ -172,6 +243,33 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
                       </button>
                     ))}
                   </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                  <Navigation className="w-4 h-4 text-emerald-500" />
+                  Transport Mode
+                </label>
+                <div className="flex gap-3">
+                  {[
+                    { id: 'driving', icon: Car, label: 'Driving' },
+                    { id: 'bus', icon: Bus, label: 'Bus' },
+                    { id: 'walking', icon: Navigation, label: 'Walking' }
+                  ].map(mode => (
+                    <button
+                      key={mode.id}
+                      onClick={() => setTransportMode(mode.id as any)}
+                      className={`flex-1 py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                        transportMode === mode.id 
+                          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200' 
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <mode.icon className="w-4 h-4" />
+                      <span className="hidden sm:inline">{mode.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -251,6 +349,19 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
                         <span>{item.deal.store}</span>
                         <span>•</span>
                         <span>Qty: {item.quantity}</span>
+                        {refLocation && getStoreCoordinates(item.deal.location) && (
+                          <>
+                            <span>•</span>
+                            <span className="text-emerald-600 font-bold">
+                              {getDistanceFromLatLonInKm(
+                                refLocation.lat, 
+                                refLocation.lon, 
+                                getStoreCoordinates(item.deal.location)!.lat, 
+                                getStoreCoordinates(item.deal.location)!.lon
+                              ).toFixed(1)}km
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
@@ -260,8 +371,15 @@ export default function SmartListGenerator({ onClose }: { onClose: () => void })
                 ))}
                 
                 {generatedList.length === 0 && (
-                  <div className="text-center py-8 text-slate-500">
-                    Could not find enough deals to match your criteria. Try increasing your budget.
+                  <div className="text-center py-12 px-6">
+                    <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <ShoppingBag className="w-8 h-8 text-slate-300" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 mb-2">No matching deals found</h3>
+                    <p className="text-slate-500 text-sm max-w-xs mx-auto">
+                      Could not find enough deals within 60km that match your budget and criteria. 
+                      Try increasing your budget or checking your location settings.
+                    </p>
                   </div>
                 )}
               </div>

@@ -103,12 +103,14 @@ CRITICAL RULES:
    - Chicken: #12, #14, #16
    - Multi-pack: "3 x 200g"
    - Volume: 750ml, 1L, 1.5L
-4. BOUNDING BOX must be TIGHT around the product image, excluding:
-   - Price bubbles
-   - Category headers above the tile
-   - Neighboring products
+4. BOUNDING BOX must be TIGHT around the product tile, including:
+   - The product image
+   - The price bubble/text
+   - The product name text
    - Format: [ymin, xmin, ymax, xmax] where each value is an integer from 0 to 1000 representing the relative position in the image.
-5. For HERO layouts (single product): bbox = full image minus margins
+   - MANDATORY: Every product MUST have a bounding_box.
+5. For HERO layouts (single product): bbox = [0, 0, 1000, 1000] (full image)
+6. GRID LAYOUTS: Ensure the bounding box covers the entire logical "tile" for that product.
 
 FIJI-SPECIFIC BRANDS TO RECOGNIZE:
 - Premium Island, Annalisa, Leggo's, Tim Tam, Cadbury, Mutti, Heinz, Kikkoman, 

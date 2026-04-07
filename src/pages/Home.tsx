@@ -21,11 +21,11 @@ export default function Home() {
   const isAdmin = useAppStore(state => state.isAdmin);
   const navigate = useNavigate();
   
-  // Filter out expired deals for the main view, but fallback to all if none are active
+  // Filter out expired and archived deals for the main view, but fallback to all if none are active
   const deals = useMemo(() => {
     const now = new Date();
-    const activeDeals = allDeals.filter(d => new Date(d.end_date) >= now);
-    return activeDeals.length > 0 ? activeDeals : allDeals;
+    const activeDeals = allDeals.filter(d => !d.is_archived && new Date(d.end_date) >= now);
+    return activeDeals.length > 0 ? activeDeals : allDeals.filter(d => !d.is_archived);
   }, [allDeals]);
 
   const [searchQuery, setSearchQuery] = useState('');

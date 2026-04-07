@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Home, Upload, ListTodo, WifiOff, MapPin, Search, Bell, Activity, Eye, Award, BarChart2, User, Menu, X, Users } from 'lucide-react';
 import { useAppStore } from '../store';
 import CompareBar from './CompareBar';
+import Toast from './Toast';
 
 export default function Layout({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -145,6 +146,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </main>
 
         <CompareBar />
+        <Toast />
 
         {/* Mobile Navigation */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-4 pb-safe pt-2 bg-gradient-to-t from-white via-white to-transparent pointer-events-none">

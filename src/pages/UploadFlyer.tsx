@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 type FileStatus = 'pending' | 'processing' | 'success' | 'error' | 'skipped';
 interface FileProgress {
+  id: string;
   status: FileStatus;
   message?: string;
   progress?: number;
@@ -139,7 +140,12 @@ export default function UploadFlyer() {
     setPreviews(prev => [...prev, ...newPreviews]);
     
     // Initialize synchronously to prevent mismatch
-    const initialProgresses = newFiles.map(() => ({ status: 'pending' as FileStatus, message: 'Checking file...', progress: 0 }));
+    const initialProgresses = newFiles.map(() => ({ 
+      id: Math.random().toString(36).substring(2, 9),
+      status: 'pending' as FileStatus, 
+      message: 'Checking file...', 
+      progress: 0 
+    }));
     setFileProgresses(prev => [...prev, ...initialProgresses]);
 
     const newProgresses = await Promise.all(newFiles.map(async (file) => {
@@ -173,7 +179,7 @@ export default function UploadFlyer() {
       // Replace the newly added progresses with the resolved ones
       const startIndex = next.length - newProgresses.length;
       for (let i = 0; i < newProgresses.length; i++) {
-        next[startIndex + i] = newProgresses[i];
+        next[startIndex + i] = { ...next[startIndex + i], ...newProgresses[i] };
       }
       return next;
     });
@@ -343,7 +349,7 @@ export default function UploadFlyer() {
 
           setFileProgresses(prev => {
             const next = [...prev];
-            next[idx] = { status: 'processing', progress: 40, message: 'Analyzing deals with AI...' };
+            next[idx] = { ...next[idx], status: 'processing', progress: 40, message: 'Analyzing deals with AI...' };
             return next;
           });
 
@@ -355,7 +361,7 @@ export default function UploadFlyer() {
           
           setFileProgresses(prev => {
             const next = [...prev];
-            next[idx] = { status: 'processing', progress: 80, message: 'Extracting product images...' };
+            next[idx] = { ...next[idx], status: 'processing', progress: 80, message: 'Extracting product images...' };
             return next;
           });
           
@@ -378,13 +384,20 @@ export default function UploadFlyer() {
                   if (product.bounding_box && product.bounding_box.length === 4) {
                     const [ymin, xmin, ymax, xmax] = product.bounding_box;
                     
-                    const y = (Math.min(ymin, ymax) / 1000) * img.height;
-                    const x = (Math.min(xmin, xmax) / 1000) * img.width;
-                    const height = (Math.abs(ymax - ymin) / 1000) * img.height;
-                    const width = (Math.abs(xmax - xmin) / 1000) * img.width;
+                    // Add 5% padding to the bounding box to ensure product isn't cut too tightly
+                    const padding = 50; // 50 out of 1000 is 5%
+                    const pYmin = Math.max(0, Math.min(ymin, ymax) - padding);
+                    const pXmin = Math.max(0, Math.min(xmin, xmax) - padding);
+                    const pYmax = Math.min(1000, Math.max(ymin, ymax) + padding);
+                    const pXmax = Math.min(1000, Math.max(xmin, xmax) + padding);
+
+                    const y = (pYmin / 1000) * img.height;
+                    const x = (pXmin / 1000) * img.width;
+                    const height = ((pYmax - pYmin) / 1000) * img.height;
+                    const width = ((pXmax - pXmin) / 1000) * img.width;
 
                     if (width > 0 && height > 0) {
-                      const MAX_CROP_SIZE = 200;
+                      const MAX_CROP_SIZE = 500;
                       let cropWidth = width;
                       let cropHeight = height;
                       if (cropWidth > MAX_CROP_SIZE || cropHeight > MAX_CROP_SIZE) {
@@ -399,7 +412,7 @@ export default function UploadFlyer() {
                       canvas.width = cropWidth;
                       canvas.height = cropHeight;
                       ctx.drawImage(img, x, y, width, height, 0, 0, cropWidth, cropHeight);
-                      const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
                       return { ...product, image_url: dataUrl };
                     }
                   }
@@ -437,8 +450,8 @@ export default function UploadFlyer() {
               }
             };
 
-            const generateProductId = (store: string, location: string, name: string, price: number | undefined, weight: string | undefined, brand: string | null | undefined) => {
-              const str = `${store}-${location}-${name}-${price || ''}-${weight || ''}-${brand || ''}`.toLowerCase().replace(/\s+/g, '-');
+            const generateProductId = (store: string, location: string, name: string, weight: string | undefined, brand: string | null | undefined) => {
+              const str = `${store}-${location}-${name}-${weight || ''}-${brand || ''}`.toLowerCase().replace(/\s+/g, '-');
               let hash = 0;
               for (let i = 0; i < str.length; i++) {
                 const char = str.charCodeAt(i);
@@ -453,7 +466,7 @@ export default function UploadFlyer() {
 
             return {
               ...product,
-              product_id: generateProductId(storeName, locationName, product.name, product.price, product.weight, product.brand),
+              product_id: generateProductId(storeName, locationName, product.name, product.weight, product.brand),
               store: storeName,
               location: locationName,
               start_date: (() => {
@@ -472,12 +485,14 @@ export default function UploadFlyer() {
               store_hours: flyerData.store_hours,
               traffic_status: flyerData.traffic_status,
               uploaded_at: Date.now(),
+              flyer_id: fileProgresses[idx].id,
+              is_archived: false
             };
           });
 
           setFileProgresses(prev => {
             const next = [...prev];
-            next[idx] = { status: 'success', progress: 100, message: `Found ${newDeals.length} deals` };
+            next[idx] = { ...next[idx], status: 'success', progress: 100, message: `Found ${newDeals.length} deals` };
             return next;
           });
           completedCount++;
@@ -515,7 +530,7 @@ export default function UploadFlyer() {
 
           setFileProgresses(prev => {
             const next = [...prev];
-            next[idx] = { status: 'error', message: errorMessage, progress: 0 };
+            next[idx] = { ...next[idx], status: 'error', message: errorMessage, progress: 0 };
             return next;
           });
           completedCount++;
@@ -598,12 +613,15 @@ export default function UploadFlyer() {
       // Add to history
       files.forEach((file, index) => {
         if (fileProgresses[index].status === 'success') {
+          // Count deals that belong to this specific file
+          const fileDealsCount = dealsToSave.filter(d => d.flyer_id === fileProgresses[index].id).length;
+          
           addUploadedFlyer({
             id: `flyer-${Date.now()}-${index}`,
             thumbnail: thumbnails[index] || previews[index],
             uploadDate: new Date().toISOString(),
-            dealsExtracted: dealsToSave.length, // Total deals saved in this batch
-            store: dealsToSave[0]?.store || 'Unknown Store',
+            dealsExtracted: fileDealsCount,
+            store: dealsToSave.find(d => d.flyer_id === fileProgresses[index].id)?.store || 'Unknown Store',
             status: 'processed',
             fileHash: fileProgresses[index].fileHash
           });

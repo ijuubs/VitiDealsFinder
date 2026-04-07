@@ -177,8 +177,11 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
 
   return (
     <>
-    <main 
+    <article 
+      role="button"
+      tabIndex={0}
       onClick={() => setShowDetails(true)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowDetails(true); }}
       className={`rounded-[2.5rem] relative flex flex-col overflow-hidden transition-all duration-300 h-full cursor-pointer group ${
       isExpired ? 'bg-white border border-red-100 opacity-80 shadow-sm' : 
       isBestValue ? 'bg-white border-2 border-emerald-500 shadow-[0_20px_50px_rgba(16,185,129,0.15)] scale-[1.01]' : 
@@ -301,19 +304,18 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
             </div>
           )}
         </div>
-      </div>
-        
+
         {/* Tags */}
-        <div className="flex flex-wrap gap-2 mt-3">
+        <div className="flex flex-wrap gap-2 mt-4">
           {deal.is_local && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-              <Leaf className="w-3.5 h-3.5 mr-1.5" />
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase tracking-tight">
+              <Leaf className="w-3 h-3 mr-1.5" />
               Local Fiji
             </span>
           )}
           {deal.origin === 'Fiji' && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
-              <MapPin className="w-3.5 h-3.5 mr-1.5" />
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-50 text-amber-700 border border-amber-100 uppercase tracking-tight">
+              <MapPin className="w-3 h-3 mr-1.5" />
               Fiji Grown
             </span>
           )}
@@ -326,12 +328,13 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
             else if (lowerTag.includes('free')) colorClass = "bg-purple-50 text-purple-700 border-purple-200";
             
             return (
-              <span key={idx} className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${colorClass}`}>
+              <span key={idx} className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black border uppercase tracking-tight ${colorClass}`}>
                 {tag}
               </span>
             );
           })}
         </div>
+      </div>
 
       {/* Price */}
       <div className="px-6 py-4">
@@ -360,8 +363,8 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
         )}
       </div>
 
-      {/* Price Predictor */}
-      <div className="px-6 py-2">
+      {/* Price Predictor & History */}
+      <div className="px-6 py-2 space-y-2">
         <div className={`flex items-center justify-between p-4 rounded-[1.5rem] border transition-colors ${
           isBestValue ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50/50 border-slate-100'
         }`}>
@@ -383,6 +386,30 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
             </div>
           </div>
         </div>
+
+        {deal.price_history && deal.price_history.length > 0 && (
+          <div className="p-4 rounded-[1.5rem] bg-slate-50/50 border border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Price History</span>
+              <span className="text-[10px] font-bold text-slate-400">{deal.price_history.length} records</span>
+            </div>
+            <div className="space-y-2">
+              {deal.price_history.slice(-3).reverse().map((point, idx) => (
+                <div key={idx} className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-500">{new Date(point.date).toLocaleDateString('en-FJ', { month: 'short', day: 'numeric' })}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-slate-900">${point.price.toFixed(2)}</span>
+                    {idx === 0 && deal.price && point.price > deal.price && (
+                      <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                        -${(point.price - deal.price).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Smart Insights & Logistics Combined */}
@@ -503,7 +530,7 @@ const ProductCard: React.FC<{ deal: Deal, isBestValue?: boolean, userLocation?: 
       </div>
       
       {showCompare && <CompareModal deal={deal} onClose={() => setShowCompare(false)} />}
-    </main>
+    </article>
     <ProductDetailsModal 
       deal={deal}
       isOpen={showDetails}

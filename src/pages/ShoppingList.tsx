@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import SmartListGenerator from '../components/SmartListGenerator';
 
 export default function ShoppingList() {
-  const { shoppingList, removeFromShoppingList, clearShoppingList, updateQuantity, optimizeShoppingList, deals: allDeals, userLocation, selectedRegion, addSavings, weeklyBudget, setWeeklyBudget, transportMode, setTransportMode } = useAppStore();
+  const { shoppingList, removeFromShoppingList, clearShoppingList, updateQuantity, optimizeShoppingList, deals: allDeals, userLocation, selectedRegion, addSavings, weeklyBudget, setWeeklyBudget, transportMode, setTransportMode, addToast } = useAppStore();
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const [showSmartGenerator, setShowSmartGenerator] = useState(false);
@@ -175,7 +175,7 @@ export default function ShoppingList() {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(generateExportText());
-      alert('List copied to clipboard!');
+      addToast('List copied to clipboard!', 'success');
     } catch (err) {
       console.error('Failed to copy text: ', err);
     }

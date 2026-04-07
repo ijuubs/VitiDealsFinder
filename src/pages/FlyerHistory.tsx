@@ -32,9 +32,9 @@ export default function FlyerHistory() {
     
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    const flyersThisWeek = uploadedFlyers.filter(f => new Date(f.uploadDate) >= oneWeekAgo).length;
+    const flyersThisWeek = uploadedFlyers.filter(f => f.status !== 'archived' && new Date(f.uploadDate) >= oneWeekAgo).length;
 
-    const storeCounts = deals.reduce((acc, deal) => {
+    const storeCounts = deals.filter(d => !d.is_archived).reduce((acc, deal) => {
       acc[deal.store] = (acc[deal.store] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -130,8 +130,12 @@ export default function FlyerHistory() {
                     <FileImage className="w-12 h-12 text-slate-300" />
                   </div>
                 )}
-                <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-slate-700 shadow-sm">
-                  {flyer.status === 'processed' ? 'Processed' : 'Failed'}
+                <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm backdrop-blur-md ${
+                  flyer.status === 'processed' ? 'bg-emerald-500/90 text-white' :
+                  flyer.status === 'archived' ? 'bg-slate-500/90 text-white' :
+                  'bg-rose-500/90 text-white'
+                }`}>
+                  {flyer.status}
                 </div>
               </div>
               <div className="p-5">

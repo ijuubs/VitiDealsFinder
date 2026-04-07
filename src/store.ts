@@ -33,7 +33,10 @@ interface AppState {
   compareList: Deal[];
   uploadedFlyers: UploadedFlyer[];
   hasCompletedOnboarding: boolean;
+  toasts: { id: string; message: string; type: 'success' | 'error' | 'info' }[];
   setUser: (user: any | null) => void;
+  addToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  removeToast: (id: string) => void;
   initializeAuth: () => void;
   signOut: () => Promise<void>;
   fetchUserDataFromSupabase: () => Promise<void>;
@@ -45,7 +48,7 @@ interface AppState {
   upvoteDeal: (productId: string) => void;
   downvoteDeal: (productId: string) => void;
   flagOutOfStock: (productId: string) => void;
-  addToShoppingList: (deal: Deal) => void;
+  addToShoppingList: (deal: Deal, quantity?: number) => void;
   removeFromShoppingList: (productId: string) => void;
   clearShoppingList: () => void;
   updateQuantity: (productId: string, quantity: number) => void;
@@ -83,13 +86,29 @@ export const useAppStore = create<AppState>()(
       compareList: [],
       uploadedFlyers: [],
       hasCompletedOnboarding: false,
-      setUser: (user) => set({ user, isAdmin: user?.email === 'kavi.kavinay@gmail.com' }),
+      toasts: [],
+      setUser: (user) => {
+        const adminEmails = ['kavi.kavinay@gmail.com', 'admin@fijideals.com'];
+        set({ user, isAdmin: user?.email && adminEmails.includes(user.email) });
+      },
+      addToast: (message, type = 'info') => {
+        const id = Math.random().toString(36).substring(2, 9);
+        set((state) => ({
+          toasts: [...state.toasts, { id, message, type }]
+        }));
+        setTimeout(() => get().removeToast(id), 3000);
+      },
+      removeToast: (id) => set((state) => ({
+        toasts: state.toasts.filter(t => t.id !== id)
+      })),
       initializeAuth: () => {
         if (!supabase) return;
         
+        const adminEmails = ['kavi.kavinay@gmail.com', 'admin@fijideals.com'];
+        
         supabase.auth.getSession().then(({ data: { session } }) => {
           const user = session?.user ?? null;
-          set({ user, isAdmin: user?.email === 'kavi.kavinay@gmail.com' });
+          set({ user, isAdmin: user?.email && adminEmails.includes(user.email) });
           if (user) {
             get().fetchUserDataFromSupabase();
           }
@@ -97,7 +116,7 @@ export const useAppStore = create<AppState>()(
 
         supabase.auth.onAuthStateChange((_event, session) => {
           const user = session?.user ?? null;
-          set({ user, isAdmin: user?.email === 'kavi.kavinay@gmail.com' });
+          set({ user, isAdmin: user?.email && adminEmails.includes(user.email) });
           if (user) {
             get().fetchUserDataFromSupabase();
           } else {
@@ -149,46 +168,84 @@ export const useAppStore = create<AppState>()(
         const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
         
         set((state) => {
-          // Find stores and locations being updated
-          const updatedStores = new Set(newDeals.map(d => `${d.store}|${d.location}`));
+          const updatedDeals = [...state.deals];
+          const newDealsToAdd: Deal[] = [];
           
-          // Filter out old deals for the updated stores/locations
-          // We consider a deal "old" if it was uploaded more than 1 hour ago
-          const oneHourAgo = Date.now() - 60 * 60 * 1000;
+          // Identify stores being updated
+          const updatedStoreKeys = new Set(newDeals.map(d => `${d.store}|${d.location}`));
           
-          let filteredExistingDeals = state.deals;
-          
-          if (updatedStores.size > 0) {
-            filteredExistingDeals = state.deals.filter(existingDeal => {
-              const storeLocKey = `${existingDeal.store}|${existingDeal.location}`;
-              if (updatedStores.has(storeLocKey)) {
-                // If it's the same store/location, keep it ONLY if it was uploaded recently (part of the same batch)
-                if (!existingDeal.uploaded_at || existingDeal.uploaded_at < oneHourAgo) {
-                  return false; // Remove old deal
+          newDeals.forEach(newDeal => {
+            const existingIndex = updatedDeals.findIndex(d => d.product_id === newDeal.product_id);
+            
+            if (existingIndex >= 0) {
+              const existingDeal = updatedDeals[existingIndex];
+              
+              // Price History Logic
+              if (existingDeal.price !== newDeal.price) {
+                const historyPoint = {
+                  price: existingDeal.price || 0,
+                  date: existingDeal.uploaded_at ? new Date(existingDeal.uploaded_at).toISOString() : new Date().toISOString(),
+                  store: existingDeal.store,
+                  deal_type: existingDeal.deal_type
+                };
+                
+                newDeal.price_history = [
+                  ...(existingDeal.price_history || []),
+                  historyPoint
+                ];
+                
+                // Determine price trend
+                if (newDeal.price && existingDeal.price) {
+                  if (newDeal.price < existingDeal.price) newDeal.price_trend = 'dropping';
+                  else if (newDeal.price > existingDeal.price) newDeal.price_trend = 'rising';
+                  else newDeal.price_trend = 'stable';
                 }
+              } else {
+                newDeal.price_history = existingDeal.price_history;
+                newDeal.price_trend = existingDeal.price_trend;
               }
-              return true; // Keep deal
-            });
-          }
+              
+              // Update existing deal
+              updatedDeals[existingIndex] = {
+                ...existingDeal,
+                ...newDeal,
+                is_archived: false // Reactivate if it was archived
+              };
+            } else {
+              newDealsToAdd.push(newDeal);
+            }
+          });
 
-          // Deduplicate new deals
-          const existingIds = new Set(filteredExistingDeals.map(d => d.product_id));
-          const uniqueNewDeals = newDeals.filter(d => !existingIds.has(d.product_id));
+          // Archive deals from the same store that are NOT in the new batch
+          // (Only if they were part of a previous flyer and are now missing)
+          const oneHourAgo = Date.now() - 60 * 60 * 1000;
+          const finalDeals = updatedDeals.map(deal => {
+            const storeKey = `${deal.store}|${deal.location}`;
+            if (updatedStoreKeys.has(storeKey)) {
+              // If this deal belongs to an updated store but wasn't updated in this batch
+              // and it's an "old" deal (not from the current upload session)
+              const isFromCurrentBatch = newDeals.some(nd => nd.product_id === deal.product_id);
+              if (!isFromCurrentBatch && (!deal.uploaded_at || deal.uploaded_at < oneHourAgo)) {
+                return { ...deal, is_archived: true };
+              }
+            }
+            return deal;
+          });
+
+          const allDeals = [...finalDeals, ...newDealsToAdd];
           
-          const finalDeals = [...filteredExistingDeals, ...uniqueNewDeals];
-          
-          // Also filter out deals that have expired
+          // Filter out deals that have expired (optional, maybe keep them archived)
           const now = new Date().getTime();
-          const activeDeals = finalDeals.filter(d => {
+          const activeDeals = allDeals.filter(d => {
+             if (d.is_archived) return true; // Keep archived ones in state for history
              const endDate = new Date(d.end_date).getTime();
              return isNaN(endDate) || endDate >= now;
           });
 
           if (isOffline) {
-            // If offline, queue them for sync later to ensure data integrity
             return { 
               deals: activeDeals,
-              pendingOfflineDeals: [...state.pendingOfflineDeals, ...uniqueNewDeals]
+              pendingOfflineDeals: [...state.pendingOfflineDeals, ...newDealsToAdd]
             };
           }
           
@@ -198,25 +255,12 @@ export const useAppStore = create<AppState>()(
         // Push to Supabase if online and configured
         if (!isOffline && supabase) {
           try {
-            const updatedStores = Array.from(new Set(newDeals.map(d => `${d.store}|${d.location}`)));
-            
-            for (const storeLoc of updatedStores) {
-              const [store, location] = storeLoc.split('|');
-              const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-              
-              await supabase
-                .from('deals')
-                .delete()
-                .eq('store', store)
-                .eq('location', location)
-                .lt('uploaded_at', oneHourAgo);
-            }
-
             const dealsToInsert = newDeals.map(d => ({
               ...d,
               uploaded_at: d.uploaded_at ? new Date(d.uploaded_at).toISOString() : new Date().toISOString()
             }));
             
+            // Use upsert to handle updates and history
             await supabase.from('deals').upsert(dealsToInsert, { onConflict: 'product_id' });
           } catch (error) {
             console.error('Error syncing with Supabase:', error);
@@ -277,15 +321,15 @@ export const useAppStore = create<AppState>()(
           deal.product_id === productId ? { ...deal, outOfStock: true } : deal
         )
       })),
-      addToShoppingList: (deal) => set((state) => {
+      addToShoppingList: (deal, quantity = 1) => set((state) => {
         const existing = state.shoppingList.find(item => item.product_id === deal.product_id);
         let newList;
         if (existing) {
           newList = state.shoppingList.map(item =>
-            item.product_id === deal.product_id ? { ...item, quantity: item.quantity + 1 } : item
+            item.product_id === deal.product_id ? { ...item, quantity: item.quantity + quantity } : item
           );
         } else {
-          newList = [...state.shoppingList, { product_id: deal.product_id, quantity: 1, deal }];
+          newList = [...state.shoppingList, { product_id: deal.product_id, quantity, deal }];
         }
         
         if (state.user && supabase) {

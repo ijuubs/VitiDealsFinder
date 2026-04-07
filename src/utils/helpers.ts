@@ -86,6 +86,23 @@ export function getStoreCoordinates(locationName: string) {
     if (loc.includes('savusavu')) return { lat: -16.7788, lon: 179.3333 };
     return { lat: -18.1416, lon: 178.4419 }; // Default to Suva
   }
+
+  if (loc.includes('shop n save') || loc.includes('shop n save')) {
+    if (loc.includes('suva')) return { lat: -18.1416, lon: 178.4419 };
+    if (loc.includes('nadi')) return { lat: -17.8000, lon: 177.4167 };
+    if (loc.includes('lautoka')) return { lat: -17.6167, lon: 177.4667 };
+    if (loc.includes('labasa')) return { lat: -16.4333, lon: 179.3667 };
+    if (loc.includes('nausori')) return { lat: -18.0333, lon: 178.5333 };
+    if (loc.includes('ba')) return { lat: -17.5333, lon: 177.6833 };
+    if (loc.includes('sigatoka')) return { lat: -18.1405, lon: 177.5089 };
+    if (loc.includes('navua')) return { lat: -18.2167, lon: 178.1833 };
+    if (loc.includes('nasinu')) return { lat: -18.0833, lon: 178.5000 };
+    return { lat: -18.1416, lon: 178.4419 }; // Default to Suva
+  }
+
+  if (loc.includes('cjs') || loc.includes('cjs supermarket')) {
+    return { lat: -18.0833, lon: 178.5000 }; // Default to Nasinu/Suva area
+  }
   
   return null;
 }
@@ -110,6 +127,25 @@ function deg2rad(deg: number) {
 export function parseWeightToKg(weightStr: string | undefined | null): number | null {
   if (!weightStr) return null;
   const lower = weightStr.toLowerCase().trim();
+  
+  // Handle Fiji Chicken Sizes (#12, #14, #16)
+  const chickenMatch = lower.match(/#(\d+)/);
+  if (chickenMatch) {
+    const size = parseInt(chickenMatch[1]);
+    return size / 10; // #12 = 1.2kg, #14 = 1.4kg, etc.
+  }
+
+  // Handle Multi-packs (e.g., "3 x 200g")
+  const multiMatch = lower.match(/(\d+)\s*x\s*([\d.]+)\s*(kg|g|gm|l|ml)/);
+  if (multiMatch) {
+    const count = parseInt(multiMatch[1]);
+    const val = parseFloat(multiMatch[2]);
+    const unit = multiMatch[3];
+    let baseVal = val;
+    if (unit === 'g' || unit === 'gm' || unit === 'ml') baseVal = val / 1000;
+    return count * baseVal;
+  }
+
   const match = lower.match(/([\d.]+)\s*(kg|g|gm|l|ml)/);
   if (!match) return null;
   const val = parseFloat(match[1]);
